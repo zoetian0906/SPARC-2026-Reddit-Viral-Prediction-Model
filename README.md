@@ -21,7 +21,6 @@ engagement within their subreddit or sector?
 |------|------|-------|
 | Zoe Tian | PM + ML Tech Lead | Data collection, model architecture |
 | Kristin Lai | Data Engineer | Schema design, pipeline |
-| Victoria Le | Data Scientist | Data validation, modeling |
 | Sarah Gillis | ML/DS Research | Research questions, model target |
 
 ## Stack
@@ -41,8 +40,7 @@ Python, PRAW, DuckDB, XGBoost, scikit-learn, MLflow, LangChain, FastAPI, Streaml
 │   ├── raw/          # collected Reddit data
 │   └── processed/    # cleaned, feature-engineered data
 ├── notebooks/
-│   ├── zoe/          # data collection A
-│   └── victoria/     # data collection B
+│   └── zoe/          # data collection
 ├── src/              # production scripts
 ├── docs/             # technical documentation
 └── requirements.txt
