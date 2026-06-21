@@ -49,7 +49,9 @@ def run_processing_pipeline():
             EXTRACT(HOUR FROM posted_at_local) AS hour_of_day,
             DAYOFWEEK(posted_at_local) AS day_of_week,
             CASE 
+                -- Search the body text for embedded media links, as well as the URL column
                 WHEN url LIKE '%i.redd.it%' OR url LIKE '%imgur%' THEN true 
+                WHEN body LIKE '%i.redd.it%' OR body LIKE '%imgur%' THEN true
                 ELSE false 
             END AS has_media,
             token_count AS post_length_proxy
@@ -65,8 +67,7 @@ def run_processing_pipeline():
             post_id,
             subreddit,
             0.0 AS subreddit_baseline, 
-            0.0 AS viral_score,        
-            false AS is_top_quartile   
+            0.0 AS viral_score        
         FROM processed_posts
     """)
 
