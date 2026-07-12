@@ -63,8 +63,7 @@ def run_labeling_pipeline():
             post_id,
             subreddit,
             subreddit_baseline,
-            ((0.5 * COALESCE(normalized_score, 0)) + (0.5 * COALESCE(normalized_ratio, 0))) * 100 AS viral_score
-        FROM scaled
+            ((0.5 * COALESCE(normalized_score, 0)) + (0.5 * COALESCE(normalized_ratio, 0))) * 100 AS virality_index        FROM scaled
     """)
 
     final_count = conn.execute("SELECT COUNT(*) FROM post_labels").fetchone()[0]
