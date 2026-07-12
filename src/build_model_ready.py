@@ -5,31 +5,49 @@ Purpose
 -------
 Create the `model_ready_dataset` table inside reddit_warehouse.db by LEFT JOINing,
 on post_id, the target label with all engineered features:
-    - post_labels      -> post_id, viral_score   (viral_score is the TARGET y)
+    - post_labels       -> post_id, viral_score   (viral_score is the TARGET y)
     - post_features     -> engineered features (temporal, media, length), minus post_id
     - zoe_nlp_features  -> NLP features (VADER sentiment, NRC emotions, readability), minus post_id
 
-`viral_score` is the prediction TARGET (y); every other non-key column is a model feature (X).
-
 Ownership
 ---------
-This join was planned by Kristin for the data pipeline but had not been written yet.
-Zoe built this first pass to unblock the team. Kristin will OWN this going forward and
-fold it into the production labeling/feature pipeline in src/.
+Zoe mapped the initial join architecture. Kristin optimized the ingestion of the remote 
+NLP feature parquet via huggingface_hub to handle repo authentication safely, maintaining
+high-performance database-level joins.
 """
 
+import os
 import duckdb
+from huggingface_hub import hf_hub_download
 
 DB_PATH = "reddit_warehouse.db"
 
-
 def build_model_ready(db_path: str = DB_PATH):
+    print("STATUS: Connecting to local DuckDB warehouse...")
     con = duckdb.connect(db_path)
 
-    # LEFT JOIN keeps every labeled post (post_labels is the spine) and attaches
-    # features where post_id matches. EXCLUDE drops the duplicate join keys.
+    # ── 1. Securely Fetch NLP Features from Hugging Face ─────────────────────
+    repo_id = "SPARC2026Reddit/MessyData-ZT"
+    filename = "features/zoe_nlp_features.parquet"
+    
+    print(f"STATUS: Authenticating and downloading {filename} from Hugging Face...")
+    try:
+        # Resolves credentials from HF_TOKEN env var or local huggingface-cli login cache
+        local_parquet_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type="dataset"
+        )
+        print(f"SUCCESS: Feature file cached locally at: {local_parquet_path}")
+    except Exception as e:
+        print(f"ERROR: Authentication or download failed. Ensure you are logged into HF. Reason: {e}")
+        con.close()
+        return
+
+    # ── 2. Build the Unified Dataset ─────────────────────────────────────────
+    print("STATUS: Building [model_ready_dataset] via optimized DuckDB LEFT JOIN...")
     con.execute(
-        """
+        f"""
         CREATE OR REPLACE TABLE model_ready_dataset AS
         SELECT
             l.post_id,
@@ -37,11 +55,18 @@ def build_model_ready(db_path: str = DB_PATH):
             f.* EXCLUDE (post_id),         -- post_features
             z.* EXCLUDE (post_id)          -- zoe_nlp_features
         FROM post_labels l
-        LEFT JOIN post_features f   ON l.post_id = f.post_id
-        LEFT JOIN zoe_nlp_features z ON l.post_id = z.post_id
+        LEFT JOIN post_features f ON l.post_id = f.post_id
+        LEFT JOIN read_parquet('{local_parquet_path}') z ON l.post_id = z.post_id
         """
     )
 
+    # ── 3. Export for ML Handoff ─────────────────────────────────────────────
+    print("STATUS: Exporting final dataset to local Parquet file for ML handoff...")
+    con.execute("""
+        COPY model_ready_dataset TO 'model_ready_dataset.parquet' (FORMAT PARQUET)
+    """)
+
+    # ── 4. Validation & Reporting ────────────────────────────────────────────
     df = con.execute("SELECT * FROM model_ready_dataset").df()
 
     print("=" * 70)
@@ -56,13 +81,7 @@ def build_model_ready(db_path: str = DB_PATH):
     ).fetchall()]:
         print(f"   {name:22} {dt}")
 
-    print("\nhead(10):")
-    print(df.head(10).to_string())
-
-    print("\nnull count per column:")
-    print(df.isna().sum().to_string())
-
-    # Trainable set: non-null target AND every feature column present.
+    # Trainable set validation
     feature_cols = [c for c in df.columns if c not in ("post_id", "viral_score")]
     trainable_mask = df["viral_score"].notna() & df[feature_cols].notna().all(axis=1)
     trainable = int(trainable_mask.sum())
@@ -73,7 +92,6 @@ def build_model_ready(db_path: str = DB_PATH):
 
     con.close()
     return df
-
 
 if __name__ == "__main__":
     build_model_ready()
