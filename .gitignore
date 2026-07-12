@@ -226,3 +226,14 @@ __marimo__/
 *.db
 *.parquet
 nrc_lexicon.txt
+
+# trained model artifacts (binary, not code)
+*.ubj
+*.pkl
+*.joblib
+xgb_viral_model.json
+
+# plots and experiment tracking (not code)
+*.png
+mlruns/
+mlartifacts/
