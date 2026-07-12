@@ -64,11 +64,6 @@ for row in dataset:
     if checked % CHECKPOINT_EVERY == 0:
         print(f"  Checked {checked:,} rows — collected {len(collected):,} matches so far")
 
-    # Safety stop — remove this line once you know it works
-    if checked >= 1_000_000:
-        print("Reached 1M row sample limit — stopping for W2 discovery")
-        break
-
 # ── Save ─────────────────────────────────────────────────────────────────────
 df = pd.DataFrame(collected)
 df.to_parquet(OUTPUT_PATH, index=False)
