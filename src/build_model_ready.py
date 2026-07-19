@@ -5,7 +5,7 @@ Purpose
 -------
 Create the `model_ready_dataset` table inside reddit_warehouse.db by LEFT JOINing,
 on post_id, the target label with all engineered features:
-    - post_labels       -> post_id, viral_score   (viral_score is the TARGET y)
+    - post_labels       -> post_id, virality_index   (virality_index is the TARGET y)
     - post_features     -> engineered features (temporal, media, length), minus post_id
     - zoe_nlp_features  -> NLP features (VADER sentiment, NRC emotions, readability), minus post_id
 
@@ -28,7 +28,9 @@ def build_model_ready(db_path: str = DB_PATH):
 
     # ── 1. Securely Fetch NLP Features from Hugging Face ─────────────────────
     repo_id = "SPARC2026Reddit/MessyData-ZT"
-    filename = "features/zoe_nlp_features.parquet"
+    
+    # UPDATED: Pointing to the new 96k row file in the data folder
+    filename = "data/train-00000-of-00001.parquet"
     
     print(f"STATUS: Authenticating and downloading {filename} from Hugging Face...")
     try:
@@ -51,7 +53,7 @@ def build_model_ready(db_path: str = DB_PATH):
         CREATE OR REPLACE TABLE model_ready_dataset AS
         SELECT
             l.post_id,
-            l.viral_score,                 -- TARGET y
+            l.virality_index,              -- UPDATED: matches your previous schema change
             f.* EXCLUDE (post_id),         -- post_features
             z.* EXCLUDE (post_id)          -- zoe_nlp_features
         FROM post_labels l
@@ -82,11 +84,14 @@ def build_model_ready(db_path: str = DB_PATH):
         print(f"   {name:22} {dt}")
 
     # Trainable set validation
-    feature_cols = [c for c in df.columns if c not in ("post_id", "viral_score")]
-    trainable_mask = df["viral_score"].notna() & df[feature_cols].notna().all(axis=1)
+    # UPDATED: Exclude the new virality_index column
+    feature_cols = [c for c in df.columns if c not in ("post_id", "virality_index")]
+    
+    # UPDATED: Check virality_index for nulls
+    trainable_mask = df["virality_index"].notna() & df[feature_cols].notna().all(axis=1)
     trainable = int(trainable_mask.sum())
     print(
-        f"\ntrainable rows (non-null viral_score AND complete features): "
+        f"\ntrainable rows (non-null virality_index AND complete features): "
         f"{trainable} / {len(df)}"
     )
 
