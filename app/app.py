@@ -1,9 +1,11 @@
 """
-app.py — minimal Streamlit front end (Phase D).
+app.py — minimal Streamlit front end (Phase D + Phase E parse layer).
 
-Stub data only: the single backend import is get_recommendations(..., stub=True),
-so this boots fully offline with no HuggingFace or DuckDB. Intentionally ugly and
-functional; Kristin replaces the rendering later.
+A free-text box (keyword parse stub) sits above the manual dropdowns. Text input
+drives the query when present; otherwise the selectboxes do (fallback). The
+backend runs on real data (stub=False), falling back to stub data if HuggingFace
+can't be reached. Intentionally ugly and functional; Kristin replaces the
+rendering later.
 """
 
 import os
@@ -17,6 +19,7 @@ import pandas as pd
 import streamlit as st
 
 from app.backend.contract import get_recommendations
+from app.backend.parse import location_note, parse_query
 
 CATEGORIES = [
     "Career & Work", "Fitness & Health", "Food & Cooking", "Gaming",
@@ -29,6 +32,13 @@ st.title("Reddit Viral Prediction")
 
 # ── Sidebar inputs ─────────────────────────────────────────────────────────
 st.sidebar.header("Query")
+
+# Free-text box (Phase E parse stub). When filled, it drives the query and the
+# dropdowns act as a fallback.
+query_text = st.sidebar.text_input(
+    "What do you want to post about?",
+    placeholder="e.g. best sourdough recipe tips",
+)
 
 category = st.sidebar.selectbox("Category", CATEGORIES)
 
@@ -46,17 +56,46 @@ mechanism = st.sidebar.selectbox(
 
 mode = st.sidebar.selectbox("Mode", ["newbie", "experienced", "expert"])
 
-# ── Query the backend (stub) ───────────────────────────────────────────────
-result = get_recommendations(
-    category=category,
-    post_type=post_type,
-    mechanism=mechanism,
-    mode=mode,
-    stub=True,
-)
+# ── Resolve query params: text input (parsed) takes priority over dropdowns ──
+extra_notes: list[str] = []
+q_category, q_post_type, q_mechanism = category, post_type, mechanism
+
+if query_text.strip():
+    parsed = parse_query(query_text)
+    if parsed["location_mentioned"]:
+        extra_notes.append(location_note(parsed["location_mentioned"]))
+    if parsed["category"] is None:
+        st.warning(
+            "Couldn't match your topic to a category. "
+            "Try the dropdowns below or rephrase."
+        )
+        # Fall through to the manual selectbox values (already the defaults).
+    else:
+        q_category = parsed["category"]
+        q_post_type = parsed["post_type"]      # always None from text
+        q_mechanism = parsed["mechanism"]
+
+# ── Query the backend (real data, stub fallback) ───────────────────────────
+try:
+    result = get_recommendations(
+        category=q_category,
+        post_type=q_post_type,
+        mechanism=q_mechanism,
+        mode=mode,
+        stub=False,
+    )
+except Exception:
+    st.warning("Running on sample data (could not connect to HuggingFace).")
+    result = get_recommendations(
+        category=q_category,
+        post_type=q_post_type,
+        mechanism=q_mechanism,
+        mode=mode,
+        stub=True,
+    )
 
 recommendations = result["recommendations"]
-notes = result["notes"]
+notes = list(result["notes"])  # extra_notes (location) rendered separately below
 
 # ── Confidence banner ──────────────────────────────────────────────────────
 confidence = result["confidence"]
@@ -67,6 +106,10 @@ elif confidence == "low":
     st.warning(reason)
 else:
     st.error(reason)
+
+# Location disclaimer (from the parse layer) — shown regardless of results.
+for note in extra_notes:
+    st.caption(note)
 
 # ── Recommendations ────────────────────────────────────────────────────────
 if recommendations:
