@@ -32,7 +32,7 @@ REPO_ID = "SPARC2026Reddit/MessyData-ZT"
 # needs no changes because it iterates this dict.
 HF_TABLES: dict[str, str] = {
     "model_metadata": "For RAG/rag_model_rules_FINAL.parquet",
-    # "predictions": "<Table 2 filename TBD in Phase C>",
+    "predictions": "For RAG/rag_predictions_FINAL.parquet",
 }
 
 

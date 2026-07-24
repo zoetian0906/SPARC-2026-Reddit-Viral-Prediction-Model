@@ -70,9 +70,9 @@ else:
 
 # ── Recommendations ────────────────────────────────────────────────────────
 if recommendations:
-    # Hide best_hour_utc / best_day_utc while they are None (Table 2 not wired).
+    # Hide best_hour / best_day columns while they are None.
     optional_cols = [
-        c for c in ("best_hour_utc", "best_day_utc")
+        c for c in ("best_hour", "best_day")
         if any(r.get(c) is not None for r in recommendations)
     ]
     display_cols = ["subreddit"] + optional_cols + ["predicted_score", "sample_size"]
