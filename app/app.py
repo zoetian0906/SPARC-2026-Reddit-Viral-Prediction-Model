@@ -84,8 +84,8 @@ try:
         mode=mode,
         stub=False,
     )
-except Exception:
-    st.warning("Running on sample data (could not connect to HuggingFace).")
+except Exception as e:
+    st.warning(f"Running on sample data: {e}")
     result = get_recommendations(
         category=q_category,
         post_type=q_post_type,
