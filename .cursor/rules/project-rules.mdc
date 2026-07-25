@@ -1,0 +1,34 @@
+---
+description: Core project rules for SPARC 2026 Reddit Viral Prediction (ownership, data, workflow, code)
+alwaysApply: true
+---
+
+# Project Rules
+
+Repo: SPARC 2026 Reddit Viral Prediction. Streamlit app, DuckDB, data on HuggingFace.
+
+## Ownership
+- `src/` belongs to a teammate. Read and run it, never edit it.
+- `app/ui/` belongs to a teammate. Never edit it.
+- `app/backend/` is mine. Work here.
+
+## Data
+- Never commit data files. `.parquet`, `.db`, `.csv`, `.txt`, model binaries are gitignored.
+- Data lives on HuggingFace. Code lives on GitHub.
+- Tests must not hit the network. Generate fixtures in-test with pandas and `tmp_path`.
+
+## Workflow
+- Work in phases. Do only the phase I name.
+- Run `git pull origin main --no-rebase` before any push.
+- You may commit and push. After each phase you must STOP and report. Do not
+  continue to the next phase without my confirmation.
+- Report format: what you built, what tests you wrote, test output, what you
+  did not do, anything you had to assume.
+
+## Code
+- Python. pytest for tests. Type hints on public functions.
+- Prefer permanent fixes over workarounds. If something is a workaround, say so.
+- Keep pure logic separate from Streamlit calls, so logic is testable without a
+  Streamlit runtime. `st.cache_resource` needs a running Streamlit process, so
+  anything wrapped in it can't be unit tested. Pattern: a pure function does the
+  work, a thin cached wrapper calls it. Test the pure one.
