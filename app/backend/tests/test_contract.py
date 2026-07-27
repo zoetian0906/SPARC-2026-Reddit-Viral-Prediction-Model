@@ -24,7 +24,9 @@ TOP_LEVEL_KEYS = {
     "query", "confidence", "confidence_reason",
     "recommendations", "model_quality", "drivers", "notes",
 }
-REC_KEYS = {"subreddit", "best_hour", "best_day", "predicted_score", "sample_size"}
+REC_KEYS = {
+    "subreddit", "best_hour", "best_day", "predicted_score", "sample_size", "guidance",
+}
 MODEL_QUALITY_KEYS = {"test_r2", "test_rmse", "sample_size"}
 
 # (kwargs, expected_confidence) — the four canonical cases.
@@ -146,6 +148,9 @@ def test_recommendation_item_shape(backend, kwargs, expected) -> None:
         )
         assert isinstance(rec["sample_size"], int)
 
+        # guidance: always a (non-None) string.
+        assert isinstance(rec["guidance"], str)
+
 
 @pytest.mark.parametrize("kwargs,expected", STUB_CASES)
 def test_confidence_string_is_allowed(backend, kwargs, expected) -> None:
@@ -221,6 +226,34 @@ def test_unknown_category_returns_none_and_does_not_raise(backend) -> None:
 def test_unknown_mode_does_not_raise_and_has_no_drivers(backend) -> None:
     res = backend(category="Food & Cooking", mechanism="question", mode="banana")
     assert res["drivers"] == []
+
+
+# ── guidance field ──────────────────────────────────────────────────────────
+@pytest.mark.parametrize("kwargs,expected", STUB_CASES)
+def test_every_rec_has_string_guidance(backend, kwargs, expected) -> None:
+    res = backend(**kwargs, mode="newbie")
+    for rec in res["recommendations"]:
+        assert "guidance" in rec
+        assert isinstance(rec["guidance"], str)
+
+
+@pytest.mark.parametrize("kwargs,expected", STUB_CASES)
+def test_guidance_non_empty_for_high_and_low(backend, kwargs, expected) -> None:
+    res = backend(**kwargs, mode="experienced")
+    if res["confidence"] in ("high", "low"):
+        assert res["recommendations"]
+        for rec in res["recommendations"]:
+            assert rec["guidance"].strip() != ""
+
+
+def test_guidance_differs_by_mode(backend) -> None:
+    # Same input, three modes -> guidance text must not be identical across modes.
+    texts = []
+    for mode in ("newbie", "experienced", "expert"):
+        res = backend(category="Food & Cooking", mechanism="question", mode=mode)
+        assert res["recommendations"]
+        texts.append(res["recommendations"][0]["guidance"])
+    assert len(set(texts)) == 3, f"guidance did not differ by mode: {texts}"
 
 
 # ── stub-only test (Table-2 timing not wired in the stub) ──────────────────

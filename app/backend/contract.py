@@ -13,6 +13,7 @@ real path and is monkeypatchable in tests.
 from __future__ import annotations
 
 from app.backend.confidence import assign_confidence
+from app.backend.guidance import generate_guidance
 from app.backend.loader import get_db
 from app.backend.query import lookup_predictions, lookup_segment
 from app.backend.stub import get_stub_segment
@@ -87,18 +88,33 @@ def get_recommendations(
 
     tier, reason = assign_confidence(r2, n)
 
+    # Top features for guidance come from the segment's SHAP drivers (if any),
+    # independent of whether drivers are surfaced in the response (expert only).
+    top_features = [d["feature"] for d in drivers_all[:3]]
+
     # Invariant: "none" never emits recommendations. predicted_score only at "high".
     raw_recs = [] if tier == "none" else raw_recs
-    recommendations = [
-        {
-            "subreddit": r["subreddit"],
-            "best_hour": r.get("best_hour"),
-            "best_day": r.get("best_day"),
-            "predicted_score": r.get("predicted_score") if tier == "high" else None,
-            "sample_size": r["sample_size"],
-        }
-        for r in raw_recs
-    ]
+    recommendations = []
+    for r in raw_recs:
+        best_hour = r.get("best_hour")
+        best_day = r.get("best_day")
+        recommendations.append(
+            {
+                "subreddit": r["subreddit"],
+                "best_hour": best_hour,
+                "best_day": best_day,
+                "predicted_score": r.get("predicted_score") if tier == "high" else None,
+                "sample_size": r["sample_size"],
+                # Placeholder guidance (guidance.py) — Sarah swaps in an LLM later.
+                "guidance": generate_guidance(
+                    subreddit=r["subreddit"],
+                    best_hour=best_hour,
+                    best_day=best_day,
+                    top_features=top_features,
+                    mode=mode,
+                ),
+            }
+        )
 
     # drivers only in expert mode
     drivers = list(drivers_all) if mode == "expert" else []

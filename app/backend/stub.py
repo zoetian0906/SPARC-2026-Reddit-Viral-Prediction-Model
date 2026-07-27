@@ -11,7 +11,8 @@ A segment record has the shape:
       "test_rmse": float | None,
       "sample_size": int | None,
       "recommendations": [
-          {"subreddit": str, "predicted_score": float | None, "sample_size": int}, ...
+          {"subreddit": str, "predicted_score": float | None, "sample_size": int,
+           "guidance": str}, ...
       ],
       "drivers": [{"feature": str, "shap_value": float}, ...],   # names WITHOUT _shap
       "notes": [str, ...],
@@ -38,11 +39,16 @@ def _food_cooking_question() -> dict:
         "test_rmse": 11.2,
         "sample_size": 4245,
         "recommendations": [
-            {"subreddit": "Cooking", "predicted_score": 62.4, "sample_size": 8123},
-            {"subreddit": "Baking", "predicted_score": 59.8, "sample_size": 6011},
-            {"subreddit": "MealPrepSunday", "predicted_score": 57.1, "sample_size": 4230},
-            {"subreddit": "food", "predicted_score": 55.3, "sample_size": 3902},
-            {"subreddit": "EatCheapAndHealthy", "predicted_score": 52.0, "sample_size": 1438},
+            {"subreddit": "Cooking", "predicted_score": 62.4, "sample_size": 8123,
+             "guidance": "Strong fit for recipe questions."},
+            {"subreddit": "Baking", "predicted_score": 59.8, "sample_size": 6011,
+             "guidance": "Good for baking-specific questions."},
+            {"subreddit": "MealPrepSunday", "predicted_score": 57.1, "sample_size": 4230,
+             "guidance": "Great for meal-prep and planning posts."},
+            {"subreddit": "food", "predicted_score": 55.3, "sample_size": 3902,
+             "guidance": "Broad reach; keep the title specific."},
+            {"subreddit": "EatCheapAndHealthy", "predicted_score": 52.0, "sample_size": 1438,
+             "guidance": "Best for budget-friendly angles."},
         ],
         "drivers": [
             {"feature": "subreddit", "shap_value": 1.97},
@@ -66,8 +72,10 @@ def _home_interior_all() -> dict:
         "test_rmse": 12.3,
         "sample_size": 9060,
         "recommendations": [
-            {"subreddit": "InteriorDesign", "predicted_score": 41.2, "sample_size": 5120},
-            {"subreddit": "DIY", "predicted_score": 38.7, "sample_size": 3940},
+            {"subreddit": "InteriorDesign", "predicted_score": 41.2, "sample_size": 5120,
+             "guidance": "Directional pick; data is limited here."},
+            {"subreddit": "DIY", "predicted_score": 38.7, "sample_size": 3940,
+             "guidance": "Directional pick; data is limited here."},
         ],
         "drivers": [
             {"feature": "subreddit", "shap_value": 1.80},
