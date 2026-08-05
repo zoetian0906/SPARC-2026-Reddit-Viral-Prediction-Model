@@ -193,6 +193,9 @@ if get_clicked:
 
                     if r.get("best_hour") is not None and r.get("best_day") is not None:
                         st.write(f"**Best time to post:** {r['best_day']} around {r['best_hour']}:00")
+
+                    if r.get("guidance"):
+                        st.write(r["guidance"])
             else:
                 st.info(notes[0] if notes else "No specific subreddits to suggest.")
 
@@ -207,6 +210,12 @@ if get_clicked:
                 
                 df = pd.DataFrame(recommendations)[cols]
                 st.dataframe(df, hide_index=True)
+
+                # Per-subreddit guidance below the table (kept out of the table
+                # so the long text stays readable).
+                for r in recommendations:
+                    if r.get("guidance"):
+                        st.markdown(f"**r/{r['subreddit']}** — {r['guidance']}")
             else:
                 st.info(notes[0] if notes else "No specific subreddits to suggest.")
 

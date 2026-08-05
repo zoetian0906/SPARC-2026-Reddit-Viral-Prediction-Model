@@ -1,15 +1,28 @@
 """
-parse.py — keyword-based text-to-params (Phase E).
+parse.py — text-to-params.
 
-This is a STUB. A teammate will later replace parse_query with an LLM call; the
-signature (parse_query(text) -> dict) must stay stable so the swap is a drop-in.
+Category detection uses Gemini (llm_detect_category) when a GOOGLE_API_KEY is
+configured, and falls back to the keyword heuristic (_detect_category) otherwise
+— so parse_query never raises, works fully offline, and stays fast in tests
+(which run with no key). Mechanism and location detection remain keyword/regex
+based. The signature parse_query(text) -> dict is stable.
 
-Pure logic: no network, no Streamlit, no DuckDB.
+Pure logic apart from the optional LLM call: no DuckDB; Streamlit/langchain are
+imported lazily inside app.backend.llm only when a key is present.
 """
 
 from __future__ import annotations
 
 import re
+
+from app.backend.llm import get_gemini, message_text
+
+# The fixed set of categories the LLM must map to (or NONE).
+CATEGORIES: list[str] = [
+    "Career & Work", "Fitness & Health", "Food & Cooking", "Gaming",
+    "Home & Interior", "Mental Health", "Personal Finance",
+    "Relationships & Advice", "Skincare & Beauty", "Tech & Gadgets",
+]
 
 # Lowercase keyword -> category name. Substring match against lowercased text.
 # "Cover obvious mappings" — extend freely; this is a heuristic stub.
@@ -93,6 +106,39 @@ LOCATION_PATTERNS: list[re.Pattern] = [
 ]
 
 
+def llm_detect_category(text: str) -> str | None:
+    """Map free text to exactly one of CATEGORIES via Gemini, or None.
+
+    Returns None on ANY failure (no key, network error, or a reply that is not
+    one of the 10 exact category strings) so parse_query can fall back to the
+    keyword heuristic. Temperature 0 for deterministic mapping.
+    """
+    try:
+        llm = get_gemini(temperature=0.0)
+        if llm is None:
+            return None
+
+        from langchain_core.prompts import ChatPromptTemplate
+
+        system = (
+            "You map a user's post topic to exactly ONE category from this fixed "
+            "list, or reply NONE if no category is a reasonable fit. Reply with "
+            "ONLY the exact category name or the word NONE, nothing else. "
+            "Categories: " + ", ".join(CATEGORIES) + ". "
+            "Examples: 'perfume' -> Skincare & Beauty. 'yoga' -> Fitness & Health. "
+            "'my crypto portfolio' -> Personal Finance. "
+            "'a spinning hat with lights' -> NONE."
+        )
+        prompt = ChatPromptTemplate.from_messages(
+            [("system", system), ("user", "{text}")]
+        )
+        chain = prompt | llm
+        reply = message_text(chain.invoke({"text": text})).strip().strip(".").strip()
+        return reply if reply in CATEGORIES else None
+    except Exception:
+        return None
+
+
 def _detect_category(text_lower: str) -> str | None:
     """Return the category with the most keyword hits, or None."""
     counts: dict[str, int] = {}
@@ -147,7 +193,11 @@ def parse_query(text: str) -> dict:
         }
 
     text_lower = stripped.lower()
-    category = _detect_category(text_lower)
+    # Prefer the LLM mapping; fall back to keywords when it returns None/errors
+    # (including the no-API-key case, which keeps tests offline and fast).
+    category = llm_detect_category(stripped)
+    if category is None:
+        category = _detect_category(text_lower)
     mechanism = _detect_mechanism(stripped, text_lower, category)
     location = _detect_location(stripped)
 

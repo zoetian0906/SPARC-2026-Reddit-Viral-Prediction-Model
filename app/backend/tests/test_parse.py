@@ -4,7 +4,18 @@ test_parse.py — Phase E keyword parser tests. Pure logic; no network/Streamlit
 
 from __future__ import annotations
 
-from app.backend.parse import location_note, parse_query
+from app.backend.parse import llm_detect_category, location_note, parse_query
+
+
+def test_llm_detect_category_returns_none_without_key() -> None:
+    # conftest forces no API key; must return None (fall-through), never raise.
+    assert llm_detect_category("best sourdough recipe") is None
+
+
+def test_parse_query_falls_back_to_keywords_without_key() -> None:
+    # With no key the LLM path returns None, so keyword detection drives category.
+    assert parse_query("best recipe for sourdough bread")["category"] == "Food & Cooking"
+    assert parse_query("my gaming pc build")["category"] == "Gaming"
 
 
 def test_sourdough_is_food_statement() -> None:
