@@ -225,6 +225,3 @@ def location_note(location: str) -> str:
         f"You mentioned {location}. Our data isn't geographic, so this is "
         "general guidance, not specific to that area."
     )
-```eof
-
-Once you push this, the indentation error will be gone!
