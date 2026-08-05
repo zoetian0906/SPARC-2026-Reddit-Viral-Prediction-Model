@@ -35,10 +35,7 @@ class QueryData(BaseModel):
     )
 
 # Set your Google API key as an environment variable
-key1 = "AQ.Ab8RN6"
-key2 = "LmTAFf86MVmrO"
-key3 = "SrYEKiz0iZbbW5NrzXKuiHOzk41kuvw"
-os.environ["GOOGLE_API_KEY"] = key1 + key2 + key3
+os.environ["GOOGLE_API_KEY"] = ${{secrets.API_KEY}}
 
 # 2. Initialize the model and force it to use the Pydantic schema
 # We use temperature=0 because we want deterministic extraction, not creative writing
