@@ -27,7 +27,6 @@ CATEGORIES: list[str] = [
 ]
 
 # Lowercase keyword -> category name. Substring match against lowercased text.
-# "Cover obvious mappings" — extend freely; this is a heuristic stub.
 CATEGORY_KEYWORDS: dict[str, str] = {
     "cook": "Food & Cooking",
     "recipe": "Food & Cooking",
@@ -102,7 +101,6 @@ SHOWCASE_SIGNALS: list[str] = [
 ]
 
 # Simple location signals: "in <City>" / "near <Place>" (capitalized word).
-# Not comprehensive by design — a teammate/LLM will improve this later.
 LOCATION_PATTERNS: list[re.Pattern] = [
     re.compile(r"\b(?:in|near)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)"),
 ]
@@ -149,7 +147,28 @@ def llm_parse_all(text: str) -> dict | None:
 
 
 def _detect_category(text_lower: str) -> str | None:
-# ... existing code ...
+    """Return the category with the most keyword hits, or None."""
+    counts: dict[str, int] = {}
+    for keyword, category in CATEGORY_KEYWORDS.items():
+        if keyword in text_lower:
+            counts[category] = counts.get(category, 0) + 1
+    if not counts:
+        return None
+    # Most hits wins; ties resolved by first-seen order (stable max).
+    return max(counts, key=lambda c: counts[c])
+
+
+def _detect_mechanism(text: str, text_lower: str, category: str | None) -> str | None:
+    """Question if it asks, showcase if it announces, else statement."""
+    if "?" in text:
+        return "question"
+    if any(sig in text_lower for sig in SHOWCASE_SIGNALS):
+        return "showcase"
+    if category is not None:
+        return "statement"
+    return None
+
+
 def _detect_location(text: str) -> str | None:
     for pattern in LOCATION_PATTERNS:
         match = pattern.search(text)
@@ -206,3 +225,6 @@ def location_note(location: str) -> str:
         f"You mentioned {location}. Our data isn't geographic, so this is "
         "general guidance, not specific to that area."
     )
+```eof
+
+Once you push this, the indentation error will be gone!
