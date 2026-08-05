@@ -14,8 +14,6 @@ imported lazily inside app.backend.llm only when a key is present.
 from __future__ import annotations
 
 import re
-from typing import Literal, Optional
-from pydantic import BaseModel, Field
 
 from app.backend.llm import get_gemini, message_text
 
@@ -27,6 +25,7 @@ CATEGORIES: list[str] = [
 ]
 
 # Lowercase keyword -> category name. Substring match against lowercased text.
+# "Cover obvious mappings" — extend freely; this is a heuristic stub.
 CATEGORY_KEYWORDS: dict[str, str] = {
     "cook": "Food & Cooking",
     "recipe": "Food & Cooking",
@@ -101,47 +100,41 @@ SHOWCASE_SIGNALS: list[str] = [
 ]
 
 # Simple location signals: "in <City>" / "near <Place>" (capitalized word).
+# Not comprehensive by design — a teammate/LLM will improve this later.
 LOCATION_PATTERNS: list[re.Pattern] = [
     re.compile(r"\b(?:in|near)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)"),
 ]
 
 
-class QueryData(BaseModel):
-    category: Optional[Literal[
-        "Career & Work", "Fitness & Health", "Food & Cooking", "Gaming",
-        "Home & Interior", "Mental Health", "Personal Finance",
-        "Relationships & Advice", "Skincare & Beauty", "Tech & Gadgets"
-    ]] = Field(default=None, description="The closest matching category. Null if the text doesn't fit any.")
-    mechanism: Optional[Literal["question", "showcase", "statement"]] = Field(
-        default=None, description="'question' if asking something, 'showcase' if showing off a project/item, 'statement' if general commentary. Null if indeterminate."
-    )
-    location_mentioned: Optional[str] = Field(
-        default=None, description="Any specific city, state, or geographic location mentioned. Null if none."
-    )
+def llm_detect_category(text: str) -> str | None:
+    """Map free text to exactly one of CATEGORIES via Gemini, or None.
 
-
-def llm_parse_all(text: str) -> dict | None:
-    """Parse all fields using Gemini structured output. Returns None on failure (like missing API key)."""
+    Returns None on ANY failure (no key, network error, or a reply that is not
+    one of the 10 exact category strings) so parse_query can fall back to the
+    keyword heuristic. Temperature 0 for deterministic mapping.
+    """
     try:
         llm = get_gemini(temperature=0.0)
         if llm is None:
             return None
 
         from langchain_core.prompts import ChatPromptTemplate
-        structured_llm = llm.with_structured_output(QueryData)
-        
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an intelligent natural language parser. Extract the requested fields from the user's text based strictly on the provided schema."),
-            ("user", "{text}")
-        ])
-        chain = prompt | structured_llm
-        parsed = chain.invoke({"text": text})
-        
-        return {
-            "category": parsed.category,
-            "mechanism": parsed.mechanism,
-            "location_mentioned": parsed.location_mentioned
-        }
+
+        system = (
+            "You map a user's post topic to exactly ONE category from this fixed "
+            "list, or reply NONE if no category is a reasonable fit. Reply with "
+            "ONLY the exact category name or the word NONE, nothing else. "
+            "Categories: " + ", ".join(CATEGORIES) + ". "
+            "Examples: 'perfume' -> Skincare & Beauty. 'yoga' -> Fitness & Health. "
+            "'my crypto portfolio' -> Personal Finance. "
+            "'a spinning hat with lights' -> NONE."
+        )
+        prompt = ChatPromptTemplate.from_messages(
+            [("system", system), ("user", "{text}")]
+        )
+        chain = prompt | llm
+        reply = message_text(chain.invoke({"text": text})).strip().strip(".").strip()
+        return reply if reply in CATEGORIES else None
     except Exception:
         return None
 
@@ -159,7 +152,11 @@ def _detect_category(text_lower: str) -> str | None:
 
 
 def _detect_mechanism(text: str, text_lower: str, category: str | None) -> str | None:
-    """Question if it asks, showcase if it announces, else statement."""
+    """Question if it asks, showcase if it announces, else statement.
+
+    Returns None only when there is no usable signal at all (no category and no
+    explicit question/showcase marker), e.g. empty or gibberish input.
+    """
     if "?" in text:
         return "question"
     if any(sig in text_lower for sig in SHOWCASE_SIGNALS):
@@ -178,7 +175,7 @@ def _detect_location(text: str) -> str | None:
 
 
 def parse_query(text: str) -> dict:
-    """Parse free text into recommendation params using structured LLM (with heuristic fallback).
+    """Parse free text into recommendation params (keyword stub).
 
     Never raises. post_type is always None because plain text carries no media
     signal. Returns the fixed dict shape every time.
@@ -196,19 +193,13 @@ def parse_query(text: str) -> dict:
         }
 
     text_lower = stripped.lower()
-    
-    # Prefer the LLM structured parser; fall back to keywords when it returns None/errors
+    # Prefer the LLM mapping; fall back to keywords when it returns None/errors
     # (including the no-API-key case, which keeps tests offline and fast).
-    llm_result = llm_parse_all(stripped)
-    
-    if llm_result is not None:
-        category = llm_result["category"]
-        mechanism = llm_result["mechanism"]
-        location = llm_result["location_mentioned"]
-    else:
+    category = llm_detect_category(stripped)
+    if category is None:
         category = _detect_category(text_lower)
-        mechanism = _detect_mechanism(stripped, text_lower, category)
-        location = _detect_location(stripped)
+    mechanism = _detect_mechanism(stripped, text_lower, category)
+    location = _detect_location(stripped)
 
     return {
         "category": category,
