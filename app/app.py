@@ -27,7 +27,7 @@ ENGAGEMENT_LABELS = {
     "Any": None, "Question": "question", "Showcase": "showcase", "Statement": "statement",
 }
 
-st.set_page_config(page_title="Reddit Viral Prediction")
+st.set_page_config(page_title="Reddit Viral Prediction", layout="wide", page_icon="🔴")
 
 # --- CUSTOM REDDIT CSS INJECTION ---
 st.markdown("""
@@ -69,182 +69,165 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-# ── Header with Reddit Logo ──────────────────────────────────────────────────
-st.markdown(
-    """
-    <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 0px;">
-        <img src="https://www.redditstatic.com/shreddit/assets/favicon/192x192.png" width="42" height="42" style="border-radius: 50%;">
-        <h1 style="margin: 0; padding: 0; font-size: 2.2rem;">Reddit Viral Prediction</h1>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-st.write("Find the best subreddit, timing, and strategy for your post.")
 
-# ── Inputs (all in the main area) ───────────────────────────────────────────
-query_text = st.text_area(
-    "What do you want to post about?",
-    height=100,
-    placeholder=(
-        "Describe what you want to post about...\n"
-        "e.g. I want to share my sourdough recipe with beginners"
-    ),
-)
+# ── Sidebar Navigation (Added for About Page requirement) ─────────────────────
+page = st.sidebar.radio("Navigation", ["Viral Predictor", "About this Tool"])
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    mode_label = st.selectbox("Mode", list(MODE_LABELS.keys()))
-with col2:
-    media_label = st.selectbox("Has Media", list(MEDIA_LABELS.keys()))
-with col3:
-    engagement_label = st.selectbox("Engagement type", list(ENGAGEMENT_LABELS.keys()))
+if page == "Viral Predictor":
+    # ── Header with Reddit Logo ──────────────────────────────────────────────────
+    st.markdown(
+        """
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 0px;">
+            <img src="https://www.redditstatic.com/shreddit/assets/favicon/192x192.png" width="42" height="42" style="border-radius: 50%;">
+            <h1 style="margin: 0; padding: 0; font-size: 2.2rem;">Reddit Viral Prediction</h1>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    st.write("Find the best subreddit, timing, and strategy for your post.")
 
-st.caption(
-    "Newbie: plain English advice | Experienced: data tables | "
-    "Expert: full model details and feature importance"
-)
+    # ── Inputs (all in the main area) ───────────────────────────────────────────
+    query_text = st.text_area(
+        "What do you want to post about?",
+        height=100,
+        placeholder=(
+            "Describe what you want to post about...\n"
+            "e.g. I want to share my sourdough recipe with beginners"
+        ),
+    )
 
-get_clicked = st.button("Get Recommendations")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        mode_label = st.selectbox("Mode", list(MODE_LABELS.keys()))
+    with col2:
+        media_label = st.selectbox("Has Media", list(MEDIA_LABELS.keys()))
+    with col3:
+        engagement_label = st.selectbox("Engagement type", list(ENGAGEMENT_LABELS.keys()))
 
+    st.caption(
+        "Newbie: plain English advice | Experienced: data tables | "
+        "Expert: full model details and feature importance"
+    )
 
-# ── Helpers ─────────────────────────────────────────────────────────────────
-def _banner(confidence: str, sample_size) -> None:
-    """Plain-English confidence banner shared by all modes."""
-    if confidence == "high":
-        n = sample_size if sample_size is not None else "many"
-        st.success(
-            f"✨ **Great match!** Based on {n} similar posts, here are the best "
-            "subreddits for this topic."
-        )
-    else:  # low
-        st.info(
-            "🧭 **Rough direction, not a strict prediction.** We have some data on this, "
-            "but not enough for high certainty. Use these suggestions as a general guide."
-        )
+    get_clicked = st.button("Get Recommendations")
 
-def _fetch(category, post_type, mechanism, mode):
-    """Call the backend on real data, falling back to stub data on failure."""
-    try:
-        return get_recommendations(
-            category=category, post_type=post_type, mechanism=mechanism,
-            mode=mode, stub=False,
-        )
-    except Exception:
-        st.warning("Running on sample data (could not connect to HuggingFace).")
-        return get_recommendations(
-            category=category, post_type=post_type, mechanism=mechanism,
-            mode=mode, stub=True,
-        )
-
-# ── Run + render (only after the button is clicked) ─────────────────────────
-if get_clicked:
-    mode = MODE_LABELS[mode_label]
-    post_type = MEDIA_LABELS[media_label]
-    mechanism = ENGAGEMENT_LABELS[engagement_label]
-    category = None
-    location = None
-
-    if query_text.strip():
-        parsed = parse_query(query_text)
-        location = parsed["location_mentioned"]
-        if parsed["category"] is None:
-            st.warning(
-                "Couldn't match your topic to a category. "
-                "Try rephrasing, or use the dropdowns to refine."
+    # ── Helpers ─────────────────────────────────────────────────────────────────
+    def _fetch(category, post_type, mechanism, mode):
+        """Call the backend on real data, falling back to stub data on failure."""
+        try:
+            return get_recommendations(
+                category=category, post_type=post_type, mechanism=mechanism,
+                mode=mode, stub=False,
             )
-        else:
-            category = parsed["category"]
-            mechanism = parsed["mechanism"] or mechanism
+        except Exception:
+            st.warning("Running on sample data (could not connect to HuggingFace).")
+            return get_recommendations(
+                category=category, post_type=post_type, mechanism=mechanism,
+                mode=mode, stub=True,
+            )
 
-   
-    if location:
-        st.caption(location_note(location))
+    # ── Run + render (only after the button is clicked) ─────────────────────────
+    if get_clicked:
+        mode = MODE_LABELS[mode_label]
+        post_type = MEDIA_LABELS[media_label]
+        mechanism = ENGAGEMENT_LABELS[engagement_label]
+        category = None
+        location = None
 
-    result = _fetch(category, post_type, mechanism, mode)
-
-    confidence = result["confidence"]
-    recommendations = result["recommendations"]
-    notes = result["notes"]
-    model_quality = result["model_quality"]
-    drivers = result["drivers"]
-
-    st.divider()
-
-    # --- NO ERROR SCREENS FOR LOW/NONE CONFIDENCE ---
-    if confidence == "none":
-        st.info("📊 **Not enough data for a confident prediction.**")
-        st.write(result.get("confidence_reason", "We need more specific details to run the model."))
-        if notes:
-            st.caption(f"💡 *Insight:* {notes[0]}") # Show notes[0] explaining why
-            
-    else:
-        sample_size = model_quality.get("sample_size")
-        _banner(confidence, sample_size)
-
-        # --- NEWBIE MODE---
-        if mode == "newbie":
-            if recommendations:
-                for i, r in enumerate(recommendations, start=1):
-                    st.subheader(f"{i}. r/{r['subreddit']}")
-                    
-                    # Show predicted score ONLY if high confidence
-                    if confidence == "high" and r.get("predicted_score") is not None:
-                        st.metric(label="Expected Virality Score", value=round(r['predicted_score'], 2))
-
-                    if r.get("best_hour") is not None and r.get("best_day") is not None:
-                        st.write(f"**Best time to post:** {r['best_day']} around {r['best_hour']}:00")
-
-                    if r.get("guidance"):
-                        st.write(r["guidance"])
+        if query_text.strip():
+            parsed = parse_query(query_text)
+            location = parsed["location_mentioned"]
+            if parsed["category"] is None:
+                st.warning(
+                    "Couldn't match your topic to a category. "
+                    "Try rephrasing, or use the dropdowns to refine."
+                )
             else:
-                st.info(notes[0] if notes else "No specific subreddits to suggest.")
+                category = parsed["category"]
+                mechanism = parsed["mechanism"] or mechanism
 
-        # --- EXPERIENCED & EXPERT MODES ---
-        else: 
-            if recommendations:
-                cols = ["subreddit", "best_hour", "best_day"]
-                # Hide predicted_score number if confidence is low
-                if confidence == "high":
-                    cols.append("predicted_score")
-                cols.append("sample_size")
+       
+        if location:
+            st.caption(location_note(location))
+
+        result = _fetch(category, post_type, mechanism, mode)
+
+        confidence = result["confidence"]
+        recommendations = result.get("recommendations", [])
+        model_quality = result.get("model_quality", {})
+        drivers = result.get("drivers", [])
+
+        st.divider()
+
+        # --- NO ERROR SCREENS FOR LOW/NONE CONFIDENCE ---
+        if confidence == "none" or not recommendations:
+            st.warning("Unfortunately we do not have meaningful data to issue a recommendation in that category.")
                 
-                df = pd.DataFrame(recommendations)[cols]
-                st.dataframe(df, hide_index=True)
-
-                # Per-subreddit guidance below the table (kept out of the table
-                # so the long text stays readable).
-                for r in recommendations:
+        else:
+            # --- NEWBIE MODE---
+            if mode == "newbie":
+                st.subheader("Here are our recommendations for your post.")
+                for i, r in enumerate(recommendations[:5], start=1):
+                    st.markdown(f"**{i}. r/{r['subreddit']}**")
                     if r.get("guidance"):
-                        st.markdown(f"**r/{r['subreddit']}** — {r['guidance']}")
-            else:
-                st.info(notes[0] if notes else "No specific subreddits to suggest.")
+                        st.info(f"💡 {r['guidance']}")
 
-            with st.expander("Model Quality"):
-                st.write("test_r2:", model_quality["test_r2"])
-                st.write("test_rmse:", model_quality["test_rmse"])
-                st.write("sample_size:", model_quality["sample_size"])
+            # --- EXPERIENCED & EXPERT MODES ---
+            else: 
+                cols = ["subreddit", "best_hour", "best_day"]
+                df = pd.DataFrame(recommendations)[cols]
+                st.dataframe(df, hide_index=True, use_container_width=True)
 
-            if mode == "expert":
-                if drivers:
-                    with st.expander("Feature Importance (SHAP)"):
-                        ddf = (
-                            pd.DataFrame(drivers)
-                            .sort_values("shap_value", ascending=False)
-                            .set_index("feature")
-                        )
-                        st.bar_chart(ddf["shap_value"])
-                with st.expander("Notes"):
-                    for note in notes:
-                        st.write("-", note)
+                if mode == "experienced":
+                    st.subheader("Actionable Guidance")
+                    for r in recommendations:
+                        if r.get("guidance"):
+                            st.write(f"**r/{r['subreddit']}**: {r['guidance']}")
+
+                elif mode == "expert":
+                    st.subheader("Model Quality & Reliability")
+                    st.caption(
+                        "**How to read this:** Test R² shows the proportion of variance in virality explained by our features (higher is better). "
+                        "RMSE measures the average prediction error. Sample size indicates the volume of historical posts driving this output."
+                    )
+                    col_a, col_b, col_c = st.columns(3)
+                    col_a.metric("Test R²", round(model_quality.get("test_r2", 0), 3))
+                    col_b.metric("Test RMSE", round(model_quality.get("test_rmse", 0), 3))
+                    col_c.metric("Sample Size", model_quality.get("sample_size", 0))
+
+                    if drivers:
+                        st.subheader("Top 3 Feature Importances (SHAP)")
+                        drivers_df = pd.DataFrame(drivers).sort_values("shap_value", ascending=False).head(3)
+                        st.bar_chart(drivers_df.set_index("feature"))
+
+                    st.subheader("Strategic Guidance")
+                    for r in recommendations:
+                        if r.get("guidance"):
+                            st.write(f"**r/{r['subreddit']}**: {r['guidance']}")
+
+elif page == "About this Tool":
+    st.title("About the Reddit Virality Predictor")
+    
+    st.subheader("Product Motivation")
+    st.write("Navigating Reddit can be challenging. This tool exists to help users identify the optimal subreddit, timing, and strategy to maximize the reach of their posts based on historical data.")
+    
+    st.subheader("Target User")
+    st.write("From casual posters wanting to share a recipe to digital marketers aiming for maximum engagement, this tool scales to your technical comfort level.")
+    
+    st.subheader("How to Use It")
+    st.write("- **Newbie Mode**: Plain English, straightforward recommendations. Best for quick, casual posting.\n- **Experienced Mode**: Introduces data tables and timing windows. Best for standard content strategy.\n- **Expert Mode**: Exposes the underlying ML model metrics and feature importance. Best for data scientists and marketers requiring high precision.")
+
+    st.subheader("Project Background")
+    st.write("Built as part of a collaborative data engineering and machine learning pipeline. It provides directional guidance based on historical trends, rather than absolute guarantees of virality.")
 
 # ── Disclaimer (for Reddit Logo Use) ─────────────────────────────────────────
 st.divider()
 st.markdown(
     """
     <div style="text-align: center; margin-top: 1rem;">
-        <p style="color: #787C7E; font-size: 0.7rem;">
-            Disclaimer: All logos and trademarks are property of their respective owners 
-            and are used for educational purposes only.
+        <p style="color: #787C7E; font-size: 0.9rem; font-weight: bold;">
+            This is a SPARC 2026 student research project. Not for profit, not for commercial use.<br>
+            <span style="font-size: 0.7rem; font-weight: normal;">Disclaimer: All logos and trademarks are property of their respective owners and are used for educational purposes only.</span>
         </p>
     </div>
     """,
