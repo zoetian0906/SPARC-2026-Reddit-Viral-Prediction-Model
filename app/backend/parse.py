@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 
-from app.backend.llm import get_gemini, message_text
+from app.backend.llm import get_gemini, message_text, perf_timer
 
 # The fixed set of categories the LLM must map to (or NONE).
 CATEGORIES: list[str] = [
@@ -133,7 +133,9 @@ def llm_detect_category(text: str) -> str | None:
             [("system", system), ("user", "{text}")]
         )
         chain = prompt | llm
-        reply = message_text(chain.invoke({"text": text})).strip().strip(".").strip()
+        with perf_timer("gemini:category"):
+            reply = message_text(chain.invoke({"text": text}))
+        reply = reply.strip().strip(".").strip()
         return reply if reply in CATEGORIES else None
     except Exception:
         return None

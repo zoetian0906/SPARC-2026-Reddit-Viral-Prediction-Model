@@ -107,12 +107,15 @@ def get_db() -> duckdb.DuckDBPyConnection:
 
         @st.cache_resource
         def _load_and_build() -> duckdb.DuckDBPyConnection:
-            token = _resolve_token(st)
-            tables = {
-                name: load_table(REPO_ID, filename, token=token)
-                for name, filename in HF_TABLES.items()
-            }
-            return build_db(tables)
+            from app.backend.llm import perf_timer
+
+            with perf_timer("data_load:hf->duckdb"):
+                token = _resolve_token(st)
+                tables = {
+                    name: load_table(REPO_ID, filename, token=token)
+                    for name, filename in HF_TABLES.items()
+                }
+                return build_db(tables)
 
         _cached_get_db = _load_and_build
 

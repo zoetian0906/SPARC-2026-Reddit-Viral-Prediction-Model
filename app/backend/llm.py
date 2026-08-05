@@ -12,8 +12,31 @@ callers fall back to their existing stub/template behavior.
 from __future__ import annotations
 
 import os
+import sys
+import time
+from contextlib import contextmanager
 
 MODEL_NAME = "gemini-3.5-flash"
+
+# Hard caps so a single request can never hang the app. langchain-google-genai
+# defaults to NO timeout and max_retries=6 (a retry storm under transient errors);
+# these bounds keep each call fast and bounded.
+REQUEST_TIMEOUT_S = 8.0
+MAX_RETRIES = 1
+
+
+@contextmanager
+def perf_timer(label: str):
+    """Print '[perf] <label>: N.NNs' to stderr (visible in Streamlit Cloud logs)."""
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        print(
+            f"[perf] {label}: {time.perf_counter() - start:.2f}s",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 def get_google_key() -> str | None:
@@ -48,6 +71,8 @@ def get_gemini(temperature: float = 0.0):
         model=MODEL_NAME,
         temperature=temperature,
         google_api_key=key,
+        timeout=REQUEST_TIMEOUT_S,
+        max_retries=MAX_RETRIES,
     )
 
 

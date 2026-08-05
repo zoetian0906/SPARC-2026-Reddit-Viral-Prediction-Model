@@ -13,7 +13,7 @@ real path and is monkeypatchable in tests.
 from __future__ import annotations
 
 from app.backend.confidence import assign_confidence
-from app.backend.guidance import generate_guidance
+from app.backend.guidance import generate_guidance_batch
 from app.backend.loader import get_db
 from app.backend.query import lookup_predictions, lookup_segment
 from app.backend.stub import get_stub_segment
@@ -96,25 +96,23 @@ def get_recommendations(
     raw_recs = [] if tier == "none" else raw_recs
     recommendations = []
     for r in raw_recs:
-        best_hour = r.get("best_hour")
-        best_day = r.get("best_day")
         recommendations.append(
             {
                 "subreddit": r["subreddit"],
-                "best_hour": best_hour,
-                "best_day": best_day,
+                "best_hour": r.get("best_hour"),
+                "best_day": r.get("best_day"),
                 "predicted_score": r.get("predicted_score") if tier == "high" else None,
                 "sample_size": r["sample_size"],
-                # Placeholder guidance (guidance.py) — Sarah swaps in an LLM later.
-                "guidance": generate_guidance(
-                    subreddit=r["subreddit"],
-                    best_hour=best_hour,
-                    best_day=best_day,
-                    top_features=top_features,
-                    mode=mode,
-                ),
             }
         )
+
+    # Guidance for ALL recs in a SINGLE Gemini call (falls back to templates with
+    # no key / on error), keeping total LLM calls per query to at most 2.
+    guidances = generate_guidance_batch(
+        recommendations, top_features=top_features, mode=mode, category=category
+    )
+    for rec, guidance in zip(recommendations, guidances):
+        rec["guidance"] = guidance
 
     # drivers only in expert mode
     drivers = list(drivers_all) if mode == "expert" else []
