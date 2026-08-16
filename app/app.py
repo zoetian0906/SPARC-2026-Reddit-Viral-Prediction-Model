@@ -272,7 +272,7 @@ elif page == "About this Tool":
             "Backend, feature engineering, modeling, deployment\n\n"
             "**Sarah Gillis**  \n"
             "Machine learning, LLM integration\n\n"
-            "**Kristin [last name]**  \n"
+            "**Kristin Lai**  \n"
             "Data pipeline, frontend design\n\n"
             "---\n\n"
             "SPARC 2026 Summer Research Program  \n"
