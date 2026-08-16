@@ -1,7 +1,7 @@
 """
 app.py — Streamlit front end (Phase D/E + UI pass).
 
-Main-area layout (no sidebar): a free-text box drives the query via the keyword
+Main-area layout (no sidebar for inputs): a free-text box drives the query via the keyword
 parse stub; three dropdowns (mode / has media / engagement) refine it. Results
 render only after "Get Recommendations" is clicked, and the level of detail
 depends on the selected mode. Backend runs on real data (stub=False) with a
@@ -70,7 +70,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Sidebar Navigation (Added for About Page requirement) ─────────────────────
+# ── Sidebar Navigation ────────────────────────────────────────────────────────
 page = st.sidebar.radio("Navigation", ["Viral Predictor", "About this Tool"])
 
 if page == "Viral Predictor":
@@ -86,23 +86,43 @@ if page == "Viral Predictor":
     )
     st.write("Find the best subreddit, timing, and strategy for your post.")
 
-    # ── Inputs (all in the main area) ───────────────────────────────────────────
+    # ── Inputs ──────────────────────────────────────────────────────────────────
     query_text = st.text_area(
         "What do you want to post about?",
+        value="I want to share my sourdough recipe with beginners",
         height=100,
-        placeholder=(
-            "Describe what you want to post about...\n"
-            "e.g. I want to share my sourdough recipe with beginners"
-        ),
+        help="Describe what you want to post about or paste your draft concept here to analyze virality potential."
     )
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        mode_label = st.selectbox("Mode", list(MODE_LABELS.keys()))
+        mode_label = st.selectbox(
+            "Mode", 
+            list(MODE_LABELS.keys()),
+            help=(
+                "**Choose your detail level:**\n\n"
+                "• **Newbie**: Plain English, straightforward recommendations. Best for quick, casual posting.\n\n"
+                "• **Experienced**: Introduces data tables and timing windows. Best for standard content strategy.\n\n"
+                "• **Expert**: Exposes underlying ML metrics and feature importance. Best for data scientists and marketers."
+            )
+        )
     with col2:
-        media_label = st.selectbox("Has Media", list(MEDIA_LABELS.keys()))
+        media_label = st.selectbox(
+            "Has Media", 
+            list(MEDIA_LABELS.keys()),
+            help="Filter recommendations based on whether your post contains media (images/videos)."
+        )
     with col3:
-        engagement_label = st.selectbox("Engagement type", list(ENGAGEMENT_LABELS.keys()))
+        engagement_label = st.selectbox(
+            "Engagement type", 
+            list(ENGAGEMENT_LABELS.keys()),
+            help=(
+                "**Select the intent of your post:**\n\n"
+                "• **Showcase**: Sharing a finished project, creation, photo, or achievement ('Look at what I made').\n\n"
+                "• **Question**: Seeking advice, troubleshooting, or recommendations from the sub.\n\n"
+                "• **Statement**: Sharing news, an opinion, analysis, or starting a general discussion."
+            )
+        )
 
     st.caption(
         "Newbie: plain English advice | Experienced: data tables | "
@@ -146,13 +166,12 @@ if page == "Viral Predictor":
                 category = parsed["category"]
                 mechanism = parsed["mechanism"] or mechanism
 
-       
         if location:
             st.caption(location_note(location))
 
         result = _fetch(category, post_type, mechanism, mode)
 
-        confidence = result["confidence"]
+        confidence = result.get("confidence", "none")
         recommendations = result.get("recommendations", [])
         model_quality = result.get("model_quality", {})
         drivers = result.get("drivers", [])
@@ -161,10 +180,12 @@ if page == "Viral Predictor":
 
         # --- NO ERROR SCREENS FOR LOW/NONE CONFIDENCE ---
         if confidence == "none" or not recommendations:
-            st.warning("Unfortunately we do not have meaningful data to issue a recommendation in that category.")
-                
+            st.warning("Unfortunately we do not have meangingful data to issue a recommendation in that category.")
         else:
-            # --- NEWBIE MODE---
+            if confidence == "low":
+                st.info("Note: Recommendations are based on limited historical data for this category.")
+
+            # --- NEWBIE MODE ---
             if mode == "newbie":
                 st.subheader("Here are our recommendations for your post.")
                 for i, r in enumerate(recommendations[:5], start=1):
@@ -174,9 +195,23 @@ if page == "Viral Predictor":
 
             # --- EXPERIENCED & EXPERT MODES ---
             else: 
-                cols = ["subreddit", "best_hour", "best_day"]
-                df = pd.DataFrame(recommendations)[cols]
-                st.dataframe(df, hide_index=True, use_container_width=True)
+                # Create DataFrame and insert Rank column
+                df = pd.DataFrame(recommendations)
+                df.insert(0, "Rank", range(1, len(df) + 1))
+                
+                cols = ["Rank", "subreddit", "best_hour", "best_day"]
+                display_cols = [c for c in cols if c in df.columns]
+                
+                st.dataframe(
+                    df[display_cols].rename(columns={
+                        "Rank": "Rank",
+                        "subreddit": "Subreddit",
+                        "best_hour": "Best Hour (UTC)",
+                        "best_day": "Best Day"
+                    }), 
+                    hide_index=True, 
+                    use_container_width=True
+                )
 
                 if mode == "experienced":
                     st.subheader("Actionable Guidance")
