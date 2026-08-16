@@ -253,18 +253,35 @@ if page == "Viral Predictor":
 
 elif page == "About this Tool":
     st.title("About the Reddit Virality Predictor")
-    
-    st.subheader("Product Motivation")
-    st.write("Navigating Reddit can be challenging. This tool exists to help users identify the optimal subreddit, timing, and strategy to maximize the reach of their posts based on historical data.")
-    
-    st.subheader("Target User")
-    st.write("From casual posters wanting to share a recipe to digital marketers aiming for maximum engagement, this tool scales to your technical comfort level.")
-    
-    st.subheader("How to Use It")
-    st.write("- **Experienced Mode**: A ranked subreddit table with best posting times and actionable guidance. Best for standard content strategy.\n- **Technical Professional Mode**: Everything in Experienced, plus the underlying ML model metrics (R², RMSE, sample size) and ranked feature importances. Best for data scientists and marketers requiring high precision.")
 
-    st.subheader("Project Background")
-    st.write("Built as part of a collaborative data engineering and machine learning pipeline. It provides directional guidance based on historical trends, rather than absolute guarantees of virality.")
+    with st.expander("Product Motivation", expanded=True):
+        st.write("Navigating Reddit can be challenging. This tool exists to help users identify the optimal subreddit, timing, and strategy to maximize the reach of their posts based on historical data.")
+
+    with st.expander("Target User"):
+        st.write("From casual posters wanting to share a recipe to digital marketers aiming for maximum engagement, this tool scales to your technical comfort level.")
+
+    with st.expander("How to Use It"):
+        st.write("- **Experienced Mode**: A ranked subreddit table with best posting times and actionable guidance. Best for standard content strategy.\n- **Technical Professional Mode**: Everything in Experienced, plus the underlying ML model metrics (R², RMSE, sample size) and ranked feature importances. Best for data scientists and marketers requiring high precision.")
+
+    with st.expander("Project Background"):
+        st.write("Built as part of a collaborative data engineering and machine learning pipeline. It provides directional guidance based on historical trends, rather than absolute guarantees of virality.")
+
+    with st.expander("Built by"):
+        st.markdown(
+            "**Zoe Tian**  \n"
+            "Backend, feature engineering, modeling, deployment\n\n"
+            "**Sarah Gillis**  \n"
+            "Machine learning, LLM integration\n\n"
+            "**Kristin [last name]**  \n"
+            "Data pipeline, frontend design\n\n"
+            "---\n\n"
+            "SPARC 2026 Summer Research Program  \n"
+            "University of Pennsylvania  \n"
+            "August 2026"
+        )
+
+    st.subheader("Questions or feedback?")
+    st.markdown("[zoetian@engineering.upenn.edu](mailto:zoetian@engineering.upenn.edu)")
 
 # ── Disclaimer (for Reddit Logo Use) ─────────────────────────────────────────
 st.divider()
