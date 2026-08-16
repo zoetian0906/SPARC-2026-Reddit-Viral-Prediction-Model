@@ -13,7 +13,9 @@ imported lazily inside app.backend.llm only when a key is present.
 
 from __future__ import annotations
 
+import os
 import re
+import sys
 
 from app.backend.llm import get_gemini, message_text, perf_timer
 
@@ -23,6 +25,51 @@ CATEGORIES: list[str] = [
     "Home & Interior", "Mental Health", "Personal Finance",
     "Relationships & Advice", "Skincare & Beauty", "Tech & Gadgets",
 ]
+
+
+def _normalize_category(text: str) -> str:
+    """Normalize a category string for tolerant matching.
+
+    Lowercases, strips surrounding quotes/markdown/whitespace and leading/trailing
+    punctuation, unifies "&" with "and", and collapses internal whitespace. So
+    "Skincare & Beauty.", " skincare and beauty ", and "**Skincare&Beauty**" all
+    normalize to the same "skincare and beauty".
+    """
+    s = text.strip().lower()
+    s = s.strip("`*\"' \t\r\n")          # markdown / quotes
+    s = s.strip(".,!?:;")                  # trailing/leading sentence punctuation
+    s = s.replace("&", " and ")           # unify ampersand vs the word "and"
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+# Normalized form -> canonical category, so any formatting variance in the LLM
+# reply resolves back to the exact canonical string.
+_CATEGORY_LOOKUP: dict[str, str] = {_normalize_category(c): c for c in CATEGORIES}
+
+
+def _match_category(reply: str) -> str | None:
+    """Resolve a raw LLM reply to a canonical category, or None.
+
+    Tries an exact normalized match first, then a containment check so replies
+    with preamble (e.g. "Category: Skincare & Beauty") still resolve.
+    """
+    norm = _normalize_category(reply)
+    if not norm or norm == "none":
+        return None
+    if norm in _CATEGORY_LOOKUP:
+        return _CATEGORY_LOOKUP[norm]
+    # Preamble/extra words: find a canonical name embedded in the reply.
+    for canon_norm, canonical in _CATEGORY_LOOKUP.items():
+        if canon_norm in norm:
+            return canonical
+    return None
+
+
+def _dbg(msg: str) -> None:
+    """Print a debug line to stderr only when DEBUG_LLM is set (off by default)."""
+    if os.environ.get("DEBUG_LLM"):
+        print(msg, file=sys.stderr, flush=True)
 
 # Lowercase keyword -> category name. Substring match against lowercased text.
 # "Cover obvious mappings" — extend freely; this is a heuristic stub.
@@ -50,6 +97,11 @@ CATEGORY_KEYWORDS: dict[str, str] = {
     "mascara": "Skincare & Beauty",
     "serum": "Skincare & Beauty",
     "sunscreen": "Skincare & Beauty",
+    "perfume": "Skincare & Beauty",
+    "fragrance": "Skincare & Beauty",
+    "cologne": "Skincare & Beauty",
+    "nail": "Skincare & Beauty",
+    "haircare": "Skincare & Beauty",
     "invest": "Personal Finance",
     "budget": "Personal Finance",
     "savings": "Personal Finance",
@@ -72,6 +124,11 @@ CATEGORY_KEYWORDS: dict[str, str] = {
     "fitness": "Fitness & Health",
     "exercise": "Fitness & Health",
     "diet": "Fitness & Health",
+    "yoga": "Fitness & Health",
+    "pilates": "Fitness & Health",
+    "stretching": "Fitness & Health",
+    "running": "Fitness & Health",
+    "cardio": "Fitness & Health",
     "mental": "Mental Health",
     "anxiety": "Mental Health",
     "therapy": "Mental Health",
@@ -79,6 +136,7 @@ CATEGORY_KEYWORDS: dict[str, str] = {
     "stress": "Mental Health",
     "burnout": "Mental Health",
     "overwhelmed": "Mental Health",
+    "meditation": "Mental Health",
     "relationship": "Relationships & Advice",
     "dating": "Relationships & Advice",
     "breakup": "Relationships & Advice",
@@ -107,27 +165,36 @@ LOCATION_PATTERNS: list[re.Pattern] = [
 
 
 def llm_detect_category(text: str) -> str | None:
-    """Map free text to exactly one of CATEGORIES via Gemini, or None.
+    """Map free text to one of CATEGORIES via Gemini, or None.
 
-    Returns None on ANY failure (no key, network error, or a reply that is not
-    one of the 10 exact category strings) so parse_query can fall back to the
-    keyword heuristic. Temperature 0 for deterministic mapping.
+    The reply is resolved tolerantly (_match_category): case-insensitive, "&"/"and"
+    unified, punctuation/markdown stripped, with a containment fallback for
+    preamble. Returns None on ANY failure (no key, network error, or a reply that
+    resolves to nothing) so parse_query can fall back to the keyword heuristic.
+    Temperature 0 for deterministic mapping. Set DEBUG_LLM=1 to log raw replies.
     """
     try:
         llm = get_gemini(temperature=0.0)
         if llm is None:
+            _dbg(f"[dbg] llm_detect_category({text!r}): get_gemini returned None (no key?)")
             return None
 
         from langchain_core.prompts import ChatPromptTemplate
 
         system = (
-            "You map a user's post topic to exactly ONE category from this fixed "
-            "list, or reply NONE if no category is a reasonable fit. Reply with "
-            "ONLY the exact category name or the word NONE, nothing else. "
-            "Categories: " + ", ".join(CATEGORIES) + ". "
-            "Examples: 'perfume' -> Skincare & Beauty. 'yoga' -> Fitness & Health. "
-            "'my crypto portfolio' -> Personal Finance. "
-            "'a spinning hat with lights' -> NONE."
+            "You classify a user's Reddit post topic into EXACTLY ONE of these "
+            "categories, or NONE if none is a reasonable fit.\n"
+            "Categories: " + ", ".join(CATEGORIES) + ".\n"
+            "Rules:\n"
+            "- Reply with ONLY the category name copied verbatim from the list, "
+            "or the single word NONE. No punctuation, quotes, or explanation.\n"
+            "- Handle single keywords, full sentences, and likely typos by "
+            "interpreting the user's intended meaning.\n"
+            "Examples:\n"
+            "perfume -> Skincare & Beauty\n"
+            "yoja -> Fitness & Health\n"
+            "I want to share my baking recipe -> Food & Cooking\n"
+            "a spinning hat with lights -> NONE"
         )
         prompt = ChatPromptTemplate.from_messages(
             [("system", system), ("user", "{text}")]
@@ -135,9 +202,11 @@ def llm_detect_category(text: str) -> str | None:
         chain = prompt | llm
         with perf_timer("gemini:category"):
             reply = message_text(chain.invoke({"text": text}))
-        reply = reply.strip().strip(".").strip()
-        return reply if reply in CATEGORIES else None
-    except Exception:
+        matched = _match_category(reply)
+        _dbg(f"[dbg] llm_detect_category({text!r}): raw={reply!r} matched={matched!r}")
+        return matched
+    except Exception as e:
+        _dbg(f"[dbg] llm_detect_category({text!r}): EXCEPTION {type(e).__name__}: {e}")
         return None
 
 
