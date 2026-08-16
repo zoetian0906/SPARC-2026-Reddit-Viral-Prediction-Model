@@ -3,7 +3,7 @@ contract.py — the response contract for the recommendations backend.
 
 `get_recommendations` returns the SAME dict shape for every input (stub or real,
 error or empty). The assembly rules (confidence tiering, hiding predicted_score
-unless high, expert-only drivers, none -> empty recs) are shared across both
+unless high, technical-only drivers, none -> empty recs) are shared across both
 paths so behavior is identical apart from where the data comes from.
 
 Pure logic apart from get_db() (Streamlit-cached), which is only called on the
@@ -44,7 +44,7 @@ def get_recommendations(
     category: str,
     post_type: str | None = None,   # maps to Table 1/2 has_media
     mechanism: str | None = None,    # maps to Table 1/2 engagement_mechanism
-    mode: str = "newbie",            # newbie | experienced | expert
+    mode: str = "experienced",       # experienced | technical
     stub: bool = True,
 ) -> dict:
     """Return recommendations for a query segment in the fixed contract shape.
@@ -89,11 +89,17 @@ def get_recommendations(
     tier, reason = assign_confidence(r2, n)
 
     # Top features for guidance come from the segment's SHAP drivers (if any),
-    # independent of whether drivers are surfaced in the response (expert only).
+    # independent of whether drivers are surfaced in the response (technical only).
     top_features = [d["feature"] for d in drivers_all[:3]]
 
     # Invariant: "none" never emits recommendations. predicted_score only at "high".
-    raw_recs = [] if tier == "none" else raw_recs
+    # Rank subreddits by predicted engagement, highest first (Item 6). Real data is
+    # already sorted by query.py; this makes ordering explicit and source-agnostic.
+    raw_recs = (
+        []
+        if tier == "none"
+        else sorted(raw_recs, key=lambda r: (r.get("predicted_score") or 0.0), reverse=True)
+    )
     recommendations = []
     for r in raw_recs:
         recommendations.append(
@@ -107,15 +113,18 @@ def get_recommendations(
         )
 
     # Guidance for ALL recs in a SINGLE Gemini call (falls back to templates with
-    # no key / on error), keeping total LLM calls per query to at most 2.
+    # no key / on error), keeping total LLM calls per query to at most 2. The UI's
+    # "technical" mode maps to guidance.py's analytical "expert" persona (guidance.py
+    # is Sarah's zone and still keys personas as newbie/experienced/expert).
+    guidance_mode = "expert" if mode == "technical" else mode
     guidances = generate_guidance_batch(
-        recommendations, top_features=top_features, mode=mode, category=category
+        recommendations, top_features=top_features, mode=guidance_mode, category=category
     )
     for rec, guidance in zip(recommendations, guidances):
         rec["guidance"] = guidance
 
-    # drivers only in expert mode
-    drivers = list(drivers_all) if mode == "expert" else []
+    # drivers (SHAP feature importances) only surface in technical mode
+    drivers = list(drivers_all) if mode == "technical" else []
 
     return {
         "query": query,

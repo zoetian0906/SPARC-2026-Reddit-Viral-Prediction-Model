@@ -21,10 +21,10 @@ import streamlit as st
 from app.backend.contract import get_recommendations
 from app.backend.parse import location_note, parse_query
 
-MODE_LABELS = {"Newbie": "newbie", "Experienced": "experienced", "Expert": "expert"}
+MODE_LABELS = {"Experienced": "experienced", "Technical Professional": "technical"}
 MEDIA_LABELS = {"Any": None, "Yes": "True", "No": "False"}
 ENGAGEMENT_LABELS = {
-    "Any": None, "Question": "question", "Showcase": "showcase", "Statement": "statement",
+    "Question": "question", "Showcase": "showcase", "Statement": "statement",
 }
 
 st.set_page_config(page_title="Reddit Viral Prediction", layout="wide", page_icon="🔴")
@@ -87,9 +87,11 @@ if page == "Viral Predictor":
     st.write("Find the best subreddit, timing, and strategy for your post.")
 
     # ── Inputs ──────────────────────────────────────────────────────────────────
+    # First load is pre-filled with a working example so a complete result shows
+    # immediately as a tutorial (Item 7). Everything is obviously editable.
     query_text = st.text_area(
         "What do you want to post about?",
-        value="I want to share my sourdough recipe with beginners",
+        value="sunscreen",
         height=100,
         help="Describe what you want to post about or paste your draft concept here to analyze virality potential."
     )
@@ -97,13 +99,16 @@ if page == "Viral Predictor":
     col1, col2, col3 = st.columns(3)
     with col1:
         mode_label = st.selectbox(
-            "Mode", 
+            "Mode",
             list(MODE_LABELS.keys()),
+            index=0,  # Experienced is the default (required, no blank option)
             help=(
-                "**Choose your detail level:**\n\n"
-                "• **Newbie**: Plain English, straightforward recommendations. Best for quick, casual posting.\n\n"
-                "• **Experienced**: Introduces data tables and timing windows. Best for standard content strategy.\n\n"
-                "• **Expert**: Exposes underlying ML metrics and feature importance. Best for data scientists and marketers."
+                "**Choose your detail level (required):**\n\n"
+                "• **Experienced**: Ranked subreddit table with best posting times and "
+                "actionable guidance. Best for standard content strategy.\n\n"
+                "• **Technical Professional**: Everything in Experienced, plus the ML "
+                "model quality metrics (R², RMSE, sample size) and ranked feature "
+                "importances. Best for data scientists and marketers."
             )
         )
     with col2:
@@ -114,22 +119,33 @@ if page == "Viral Predictor":
         )
     with col3:
         engagement_label = st.selectbox(
-            "Engagement type", 
+            "Engagement type",
             list(ENGAGEMENT_LABELS.keys()),
+            index=0,  # Question is the default (required, no "Any" option)
             help=(
-                "**Select the intent of your post:**\n\n"
-                "• **Showcase**: Sharing a finished project, creation, photo, or achievement ('Look at what I made').\n\n"
-                "• **Question**: Seeking advice, troubleshooting, or recommendations from the sub.\n\n"
-                "• **Statement**: Sharing news, an opinion, analysis, or starting a general discussion."
+                "**Select the intent of your post (required):**\n\n"
+                "• **Question**: asking the community something "
+                "(\"What sunscreen works for oily skin?\").\n\n"
+                "• **Showcase**: sharing something you made "
+                "(\"My 6-month skincare progress\").\n\n"
+                "• **Statement**: sharing an opinion or info "
+                "(\"SPF is the most underrated skincare step\")."
             )
         )
 
     st.caption(
-        "Newbie: plain English advice | Experienced: data tables | "
-        "Expert: full model details and feature importance"
+        "Experienced: ranked subreddits, timing, and guidance | "
+        "Technical Professional: adds model metrics and feature importance"
     )
 
     get_clicked = st.button("Get Recommendations")
+
+    # Show the tutorial result on first load without a click (Item 7); after that,
+    # the user changes inputs and clicks "Get Recommendations" (Item 4).
+    first_load = "has_run" not in st.session_state
+    if first_load:
+        st.session_state["has_run"] = True
+    should_run = get_clicked or first_load
 
     # ── Helpers ─────────────────────────────────────────────────────────────────
     def _fetch(category, post_type, mechanism, mode):
@@ -146,10 +162,11 @@ if page == "Viral Predictor":
                 mode=mode, stub=True,
             )
 
-    # ── Run + render (only after the button is clicked) ─────────────────────────
-    if get_clicked:
+    # ── Run + render ────────────────────────────────────────────────────────────
+    if should_run:
         mode = MODE_LABELS[mode_label]
         post_type = MEDIA_LABELS[media_label]
+        # Engagement type is a required, explicit choice, so it drives the query.
         mechanism = ENGAGEMENT_LABELS[engagement_label]
         category = None
         location = None
@@ -164,7 +181,6 @@ if page == "Viral Predictor":
                 )
             else:
                 category = parsed["category"]
-                mechanism = parsed["mechanism"] or mechanism
 
         if location:
             st.caption(location_note(location))
@@ -185,60 +201,55 @@ if page == "Viral Predictor":
             if confidence == "low":
                 st.info("Note: Recommendations are based on limited historical data for this category.")
 
-            # --- NEWBIE MODE ---
-            if mode == "newbie":
-                st.subheader("Here are our recommendations for your post.")
-                for i, r in enumerate(recommendations[:5], start=1):
-                    st.markdown(f"**{i}. r/{r['subreddit']}**")
+            # Subreddits are already ranked by predicted engagement (highest first).
+            df = pd.DataFrame(recommendations)
+            df.insert(0, "Rank", range(1, len(df) + 1))
+
+            cols = ["Rank", "subreddit", "best_hour", "best_day"]
+            display_cols = [c for c in cols if c in df.columns]
+
+            st.dataframe(
+                df[display_cols].rename(columns={
+                    "Rank": "Rank",
+                    "subreddit": "Subreddit",
+                    "best_hour": "Best Hour (UTC)",
+                    "best_day": "Best Day"
+                }),
+                hide_index=True,
+                use_container_width=True
+            )
+
+            # --- EXPERIENCED MODE ---
+            if mode == "experienced":
+                st.subheader("Actionable Guidance")
+                for r in recommendations:
                     if r.get("guidance"):
-                        st.info(f"💡 {r['guidance']}")
+                        st.write(f"**r/{r['subreddit']}**: {r['guidance']}")
 
-            # --- EXPERIENCED & EXPERT MODES ---
-            else: 
-                # Create DataFrame and insert Rank column
-                df = pd.DataFrame(recommendations)
-                df.insert(0, "Rank", range(1, len(df) + 1))
-                
-                cols = ["Rank", "subreddit", "best_hour", "best_day"]
-                display_cols = [c for c in cols if c in df.columns]
-                
-                st.dataframe(
-                    df[display_cols].rename(columns={
-                        "Rank": "Rank",
-                        "subreddit": "Subreddit",
-                        "best_hour": "Best Hour (UTC)",
-                        "best_day": "Best Day"
-                    }), 
-                    hide_index=True, 
-                    use_container_width=True
+            # --- TECHNICAL PROFESSIONAL MODE ---
+            elif mode == "technical":
+                st.subheader("Model Quality & Reliability")
+                st.caption(
+                    "**How to read this:** Test R² shows the proportion of variance in virality explained by our features (higher is better). "
+                    "RMSE measures the average prediction error. Sample size indicates the volume of historical posts driving this output."
                 )
+                col_a, col_b, col_c = st.columns(3)
+                col_a.metric("Test R²", round(model_quality.get("test_r2", 0), 3))
+                col_b.metric("Test RMSE", round(model_quality.get("test_rmse", 0), 3))
+                col_c.metric("Sample Size", model_quality.get("sample_size", 0))
 
-                if mode == "experienced":
-                    st.subheader("Actionable Guidance")
-                    for r in recommendations:
-                        if r.get("guidance"):
-                            st.write(f"**r/{r['subreddit']}**: {r['guidance']}")
+                if drivers:
+                    st.subheader("Top 3 Feature Importances (SHAP)")
+                    # Rank by importance = absolute SHAP magnitude, highest first.
+                    drivers_df = pd.DataFrame(drivers)
+                    drivers_df["importance"] = drivers_df["shap_value"].abs()
+                    drivers_df = drivers_df.sort_values("importance", ascending=False).head(3)
+                    st.bar_chart(drivers_df.set_index("feature")["importance"])
 
-                elif mode == "expert":
-                    st.subheader("Model Quality & Reliability")
-                    st.caption(
-                        "**How to read this:** Test R² shows the proportion of variance in virality explained by our features (higher is better). "
-                        "RMSE measures the average prediction error. Sample size indicates the volume of historical posts driving this output."
-                    )
-                    col_a, col_b, col_c = st.columns(3)
-                    col_a.metric("Test R²", round(model_quality.get("test_r2", 0), 3))
-                    col_b.metric("Test RMSE", round(model_quality.get("test_rmse", 0), 3))
-                    col_c.metric("Sample Size", model_quality.get("sample_size", 0))
-
-                    if drivers:
-                        st.subheader("Top 3 Feature Importances (SHAP)")
-                        drivers_df = pd.DataFrame(drivers).sort_values("shap_value", ascending=False).head(3)
-                        st.bar_chart(drivers_df.set_index("feature"))
-
-                    st.subheader("Strategic Guidance")
-                    for r in recommendations:
-                        if r.get("guidance"):
-                            st.write(f"**r/{r['subreddit']}**: {r['guidance']}")
+                st.subheader("Strategic Guidance")
+                for r in recommendations:
+                    if r.get("guidance"):
+                        st.write(f"**r/{r['subreddit']}**: {r['guidance']}")
 
 elif page == "About this Tool":
     st.title("About the Reddit Virality Predictor")
@@ -250,7 +261,7 @@ elif page == "About this Tool":
     st.write("From casual posters wanting to share a recipe to digital marketers aiming for maximum engagement, this tool scales to your technical comfort level.")
     
     st.subheader("How to Use It")
-    st.write("- **Newbie Mode**: Plain English, straightforward recommendations. Best for quick, casual posting.\n- **Experienced Mode**: Introduces data tables and timing windows. Best for standard content strategy.\n- **Expert Mode**: Exposes the underlying ML model metrics and feature importance. Best for data scientists and marketers requiring high precision.")
+    st.write("- **Experienced Mode**: A ranked subreddit table with best posting times and actionable guidance. Best for standard content strategy.\n- **Technical Professional Mode**: Everything in Experienced, plus the underlying ML model metrics (R², RMSE, sample size) and ranked feature importances. Best for data scientists and marketers requiring high precision.")
 
     st.subheader("Project Background")
     st.write("Built as part of a collaborative data engineering and machine learning pipeline. It provides directional guidance based on historical trends, rather than absolute guarantees of virality.")

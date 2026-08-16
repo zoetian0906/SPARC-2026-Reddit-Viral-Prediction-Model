@@ -64,6 +64,37 @@ def _food_cooking_question() -> dict:
     }
 
 
+def _skincare_beauty() -> dict:
+    """High confidence: backs the default 'sunscreen' example so the tutorial
+    shows a full result even when HuggingFace is unreachable (stub fallback)."""
+    return {
+        "test_r2": 0.17,
+        "test_rmse": 11.6,
+        "sample_size": 5120,
+        "recommendations": [
+            {"subreddit": "SkincareAddiction", "predicted_score": 64.1, "sample_size": 9032,
+             "guidance": "Strong fit for routines and product questions."},
+            {"subreddit": "30PlusSkinCare", "predicted_score": 58.9, "sample_size": 4211,
+             "guidance": "Great for age-specific skincare advice."},
+            {"subreddit": "AsianBeauty", "predicted_score": 56.7, "sample_size": 3877,
+             "guidance": "Best for ingredient-focused discussion."},
+            {"subreddit": "Skincare_Addiction", "predicted_score": 54.2, "sample_size": 2600,
+             "guidance": "Broad reach; keep the title specific."},
+            {"subreddit": "beauty", "predicted_score": 51.5, "sample_size": 1710,
+             "guidance": "Good for general beauty crossovers."},
+        ],
+        "drivers": [
+            {"feature": "subreddit", "shap_value": 1.88},
+            {"feature": "title_length", "shap_value": 1.21},
+            {"feature": "body_length", "shap_value": 0.70},
+            {"feature": "engagement_mechanism", "shap_value": 0.58},
+            {"feature": "hour_of_day", "shap_value": 0.55},
+            {"feature": "vader_compound", "shap_value": 0.44},
+        ],
+        "notes": ["Segment-specific model: Skincare & Beauty."],
+    }
+
+
 def _home_interior_all() -> dict:
     """Low confidence: positive but weak R²; predicted_score is suppressed by
     contract.py (must be None at low confidence)."""
@@ -136,6 +167,8 @@ def get_stub_segment(
     """
     if category == "Food & Cooking" and mechanism == "question":
         return _food_cooking_question()
+    if category == "Skincare & Beauty":
+        return _skincare_beauty()
     if category == "Home & Interior":
         return _home_interior_all()
     if category == "Mental Health" and mechanism == "showcase":

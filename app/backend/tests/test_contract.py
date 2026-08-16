@@ -132,7 +132,7 @@ def test_top_level_shape(backend, kwargs, expected) -> None:
 
 @pytest.mark.parametrize("kwargs,expected", STUB_CASES)
 def test_recommendation_item_shape(backend, kwargs, expected) -> None:
-    res = backend(**kwargs, mode="expert")
+    res = backend(**kwargs, mode="technical")
     for rec in res["recommendations"]:
         assert set(rec.keys()) == REC_KEYS
         assert isinstance(rec["subreddit"], str)
@@ -177,7 +177,7 @@ def test_low_implies_predicted_score_none(backend, kwargs, expected) -> None:
 def test_present_best_fields_types(backend, kwargs, expected) -> None:
     # When timing fields are present (real backend), best_day is a string day name
     # and best_hour is an int 0-23.
-    res = backend(**kwargs, mode="expert")
+    res = backend(**kwargs, mode="technical")
     for rec in res["recommendations"]:
         if rec["best_day"] is not None:
             assert isinstance(rec["best_day"], str)
@@ -195,13 +195,13 @@ def test_high_confidence_shows_predicted_score(backend) -> None:
 
 
 @pytest.mark.parametrize("kwargs,expected", STUB_CASES)
-def test_newbie_has_no_drivers(backend, kwargs, expected) -> None:
-    res = backend(**kwargs, mode="newbie")
+def test_experienced_has_no_drivers(backend, kwargs, expected) -> None:
+    res = backend(**kwargs, mode="experienced")
     assert res["drivers"] == []
 
 
-def test_expert_has_drivers(backend) -> None:
-    res = backend(category="Food & Cooking", mechanism="question", mode="expert")
+def test_technical_has_drivers(backend) -> None:
+    res = backend(category="Food & Cooking", mechanism="question", mode="technical")
     assert len(res["drivers"]) > 0
     for d in res["drivers"]:
         assert set(d.keys()) == {"feature", "shap_value"}
@@ -209,8 +209,8 @@ def test_expert_has_drivers(backend) -> None:
         assert isinstance(d["shap_value"], float)
 
 
-def test_expert_driver_names_have_no_shap_suffix(backend) -> None:
-    res = backend(category="Food & Cooking", mechanism="question", mode="expert")
+def test_technical_driver_names_have_no_shap_suffix(backend) -> None:
+    res = backend(category="Food & Cooking", mechanism="question", mode="technical")
     assert res["drivers"]
     for d in res["drivers"]:
         assert not d["feature"].endswith("_shap")
@@ -231,7 +231,7 @@ def test_unknown_mode_does_not_raise_and_has_no_drivers(backend) -> None:
 # ── guidance field ──────────────────────────────────────────────────────────
 @pytest.mark.parametrize("kwargs,expected", STUB_CASES)
 def test_every_rec_has_string_guidance(backend, kwargs, expected) -> None:
-    res = backend(**kwargs, mode="newbie")
+    res = backend(**kwargs, mode="experienced")
     for rec in res["recommendations"]:
         assert "guidance" in rec
         assert isinstance(rec["guidance"], str)
@@ -247,19 +247,19 @@ def test_guidance_non_empty_for_high_and_low(backend, kwargs, expected) -> None:
 
 
 def test_guidance_differs_by_mode(backend) -> None:
-    # Same input, three modes -> guidance text must not be identical across modes.
+    # Same input, both modes -> guidance text must not be identical across modes.
     texts = []
-    for mode in ("newbie", "experienced", "expert"):
+    for mode in ("experienced", "technical"):
         res = backend(category="Food & Cooking", mechanism="question", mode=mode)
         assert res["recommendations"]
         texts.append(res["recommendations"][0]["guidance"])
-    assert len(set(texts)) == 3, f"guidance did not differ by mode: {texts}"
+    assert len(set(texts)) == 2, f"guidance did not differ by mode: {texts}"
 
 
 # ── stub-only test (Table-2 timing not wired in the stub) ──────────────────
 @pytest.mark.parametrize("kwargs,expected", STUB_CASES)
 def test_best_time_fields_none_in_stub(kwargs, expected) -> None:
-    res = get_recommendations(stub=True, **kwargs, mode="expert")
+    res = get_recommendations(stub=True, **kwargs, mode="technical")
     for rec in res["recommendations"]:
         assert rec["best_hour"] is None
         assert rec["best_day"] is None
