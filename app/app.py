@@ -116,7 +116,12 @@ if page == "Viral Predictor":
         engagement_label = st.selectbox(
             "Engagement type", 
             list(ENGAGEMENT_LABELS.keys()),
-            help="Select your intended post format: Question, Showcase, or Statement."
+            help=(
+                "**Select the intent of your post:**\n\n"
+                "• **Showcase**: Sharing a finished project, creation, photo, or achievement ('Look at what I made').\n\n"
+                "• **Question**: Seeking advice, troubleshooting, or recommendations from the sub.\n\n"
+                "• **Statement**: Sharing news, an opinion, analysis, or starting a general discussion."
+            )
         )
 
     st.caption(
