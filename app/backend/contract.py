@@ -15,8 +15,9 @@ from __future__ import annotations
 from app.backend.confidence import assign_confidence
 from app.backend.guidance import generate_guidance_batch
 from app.backend.loader import get_db
-from app.backend.query import lookup_predictions, lookup_segment
+from app.backend.query import lookup_predictions, lookup_segment, segment summary
 from app.backend.stub import get_stub_segment
+from app.backend.advice import generate_advice
 
 # Canonical model feature names = Table 1 SHAP columns minus the "_shap" suffix.
 FEATURE_NAMES: list[str] = [
@@ -123,6 +124,20 @@ def get_recommendations(
     for rec, guidance in zip(recommendations, guidances):
         rec["guidance"] = guidance
 
+    # Segment-level advice: one extra parameterized query + at most ONE Groq
+    # call, both optional. Uses the segment we ACTUALLY matched (lookup_segment
+    # falls back through ALL), not the raw request, so the numbers always
+    # describe the rows we read. Real-data path only.
+    advice = ""
+    if not stub and seg is not None and tier != "none":
+        try:
+            facts = segment_summary(
+                conn, seg["category"], seg["has_media"], seg["engagement_mechanism"]
+            )
+            advice = generate_advice(facts, level=mode)
+        except Exception:
+            advice = ""
+
     # drivers (SHAP feature importances) only surface in technical mode
     drivers = list(drivers_all) if mode == "technical" else []
 
@@ -133,5 +148,6 @@ def get_recommendations(
         "recommendations": recommendations,
         "model_quality": model_quality,
         "drivers": drivers,
+        "advice": advice,
         "notes": notes,
     }
