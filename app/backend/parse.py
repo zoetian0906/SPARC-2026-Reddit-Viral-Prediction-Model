@@ -12,12 +12,13 @@ imported lazily inside app.backend.llm only when a key is present.
 """
 
 from __future__ import annotations
+from difflib import get_close_matches
 
 import os
 import re
 import sys
 
-from app.backend.llm import get_gemini, message_text, perf_timer
+from app.backend.llm import get_gemini, message_text, perf_timer, get_llm, GROQ_FAST_MODEL
 
 # The fixed set of categories the LLM must map to (or NONE).
 CATEGORIES: list[str] = [
@@ -63,6 +64,11 @@ def _match_category(reply: str) -> str | None:
     for canon_norm, canonical in _CATEGORY_LOOKUP.items():
         if canon_norm in norm:
             return canonical
+    # Typo tolerance on the model's own reply ("Skincare & Beuty", "fitnes and
+    # health"). 0.8 is tight enough that unrelated replies still fall through.
+    close = get_close_matches(norm, list(_CATEGORY_LOOKUP), n=1, cutoff=0.8)
+    if close:
+        return _CATEGORY_LOOKUP[close[0]]
     return None
 
 
@@ -174,7 +180,7 @@ def llm_detect_category(text: str) -> str | None:
     Temperature 0 for deterministic mapping. Set DEBUG_LLM=1 to log raw replies.
     """
     try:
-        llm = get_gemini(temperature=0.0)
+        llm = get_llm(temperature=0.0, model=GROQ_FAST_MODEL)
         if llm is None:
             _dbg(f"[dbg] llm_detect_category({text!r}): get_gemini returned None (no key?)")
             return None
@@ -188,19 +194,24 @@ def llm_detect_category(text: str) -> str | None:
             "Rules:\n"
             "- Reply with ONLY the category name copied verbatim from the list, "
             "or the single word NONE. No punctuation, quotes, or explanation.\n"
-            "- Handle single keywords, full sentences, and likely typos by "
-            "interpreting the user's intended meaning.\n"
+            "- Handle single keywords and full sentences by "
+            "interpreting the user's likely intended meaning.\n"
+            "- The input often contains typos, missing letters, phonetic "
+            "spellings, or British/American variants. Silently correct them and "
+            "classify the intended meaning.\n"
             "Examples:\n"
             "perfume -> Skincare & Beauty\n"
             "yoja -> Fitness & Health\n"
             "I want to share my baking recipe -> Food & Cooking\n"
+            "sunscren -> Skincare & Beauty\n"
+            "reltionship advise -> Relationships & Advice\n"
             "a spinning hat with lights -> NONE"
         )
         prompt = ChatPromptTemplate.from_messages(
             [("system", system), ("user", "{text}")]
         )
         chain = prompt | llm
-        with perf_timer("gemini:category"):
+        with perf_timer("llm:category"):
             reply = message_text(chain.invoke({"text": text}))
         matched = _match_category(reply)
         _dbg(f"[dbg] llm_detect_category({text!r}): raw={reply!r} matched={matched!r}")
@@ -219,6 +230,33 @@ def _detect_category(text_lower: str) -> str | None:
     if not counts:
         return None
     # Most hits wins; ties resolved by first-seen order (stable max).
+    return max(counts, key=lambda c: counts[c])
+
+
+# Only fuzzy-match tokens this long; shorter ones produce noisy near-misses
+# ("rent" ~ "rant", "job" ~ "jog").
+_FUZZY_MIN_LEN = 5
+_FUZZY_CUTOFF = 0.8
+
+def _fuzzy_detect_category(text_lower: str) -> str | None:
+    """Keyword detection that tolerates typos ("sunscren", "moisturiser").
+
+    Runs only after the exact-substring pass returns None, so normal input never
+    pays for it. Same most-hits-wins rule as _detect_category.
+    """
+    tokens = [t for t in re.findall(r"[a-z]+", text_lower) if len(t) >= _FUZZY_MIN_LEN]
+    if not tokens:
+        return None
+
+    keys = list(CATEGORY_KEYWORDS)
+    counts: dict[str, int] = {}
+    for token in tokens:
+        match = get_close_matches(token, keys, n=1, cutoff=_FUZZY_CUTOFF)
+        if match:
+            category = CATEGORY_KEYWORDS[match[0]]
+            counts[category] = counts.get(category, 0) + 1
+    if not counts:
+        return None
     return max(counts, key=lambda c: counts[c])
 
 
@@ -269,6 +307,8 @@ def parse_query(text: str) -> dict:
     category = llm_detect_category(stripped)
     if category is None:
         category = _detect_category(text_lower)
+    if category is None:
+        category = _fuzzy_detect_category(text_lower)
     mechanism = _detect_mechanism(stripped, text_lower, category)
     location = _detect_location(stripped)
 
