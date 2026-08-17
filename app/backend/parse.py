@@ -199,6 +199,8 @@ def llm_detect_category(text: str) -> str | None:
             "not necessarily where they would look for advice on that topic.\n"
             "For example:\n"
             "my artisan sourdough bread company -> Food & Cooking\n"
+            "marketing myself as a couples therapist -> Relationships & Advice"
+            "life insurance for married couples -> Personal Finance"
             "- Handle single keywords and full sentences by "
             "interpreting the user's likely intended meaning.\n"
             "- The input often contains typos, missing letters, phonetic "
