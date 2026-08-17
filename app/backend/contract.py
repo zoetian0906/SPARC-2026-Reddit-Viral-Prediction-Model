@@ -15,7 +15,7 @@ from __future__ import annotations
 from app.backend.confidence import assign_confidence
 from app.backend.guidance import generate_guidance_batch
 from app.backend.loader import get_db
-from app.backend.query import lookup_predictions, lookup_segment, segment summary
+from app.backend.query import lookup_predictions, lookup_segment, segment_summary
 from app.backend.stub import get_stub_segment
 from app.backend.advice import generate_advice
 
