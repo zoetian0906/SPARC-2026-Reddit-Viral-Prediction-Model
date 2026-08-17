@@ -219,6 +219,9 @@ if page == "Viral Predictor":
                 use_container_width=True
             )
 
+            if result.get("advice"):
+                st.info(result["advice"])
+
             # --- EXPERIENCED MODE ---
             if mode == "experienced":
                 st.subheader("Actionable Guidance")
