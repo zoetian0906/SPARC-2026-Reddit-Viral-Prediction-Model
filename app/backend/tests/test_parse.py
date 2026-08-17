@@ -75,7 +75,7 @@ def test_gibberish_no_category_no_mechanism() -> None:
 def test_return_shape_keys() -> None:
     res = parse_query("anything")
     assert set(res.keys()) == {
-        "category", "post_type", "mechanism", "location_mentioned", "raw_text",
+        "category", "post_type", "mechanism", "location_mentioned", "raw_text", "category_source"
     }
 
 
