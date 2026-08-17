@@ -92,3 +92,54 @@ def message_text(response) -> str:
                 parts.append(str(part))
         return "".join(parts)
     return str(content)
+
+# ── Groq ──────────────────────────────────────────────────────────────────────
+# Groq retired the llama-3.x ids on 2026-06-17; gpt-oss is the named successor
+# pair. 120b for prose, 20b for classification (cheaper and much faster).
+GROQ_ADVICE_MODEL = "openai/gpt-oss-120b"
+GROQ_FAST_MODEL = "openai/gpt-oss-20b"
+
+
+def get_groq_key() -> str | None:
+    """Return the Groq API key from st.secrets, then env, else None.
+
+    Same defensive pattern as get_google_key: st.secrets must not raise outside
+    a Streamlit runtime.
+    """
+    key = None
+    try:
+        import streamlit as st
+
+        key = st.secrets["GROQ_API_KEY"]
+    except Exception:
+        key = None
+    if not key:
+        key = os.environ.get("GROQ_API_KEY")
+    return key or None
+
+
+def get_groq(temperature: float = 0.0, model: str = GROQ_ADVICE_MODEL):
+    """Return a ChatGroq client, or None if no key is present."""
+    key = get_groq_key()
+    if not key:
+        return None
+    from langchain_groq import ChatGroq
+
+    return ChatGroq(
+        model=model,
+        temperature=temperature,
+        groq_api_key=key,
+        timeout=REQUEST_TIMEOUT_S,
+        max_retries=MAX_RETRIES,
+    )
+
+
+def get_llm(temperature: float = 0.0, model: str = GROQ_ADVICE_MODEL):
+    """Prefer Groq, fall back to Gemini, else None.
+
+    This is the spread-the-load switch: call sites use get_llm and get Groq
+    whenever GROQ_API_KEY is set, without losing the Gemini path if it isn't.
+    Both clients are LangChain chat models, so message_text and the existing
+    prompt|llm chains work unchanged against either.
+    """
+    return get_groq(temperature, model) or get_gemini(temperature)
