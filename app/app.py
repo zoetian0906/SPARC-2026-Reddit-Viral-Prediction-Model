@@ -181,7 +181,8 @@ if page == "Viral Predictor":
                 )
             else:
                 category = parsed["category"]
-
+                if parsed.get("category_source") == "fuzzy":
+                    st.caption(f"Read that as **{category}** (corrected a likely typo).")
         if location:
             st.caption(location_note(location))
 
