@@ -250,6 +250,20 @@ if page == "Viral Predictor":
                     drivers_df = drivers_df.sort_values("importance", ascending=False).head(3)
                     st.bar_chart(drivers_df.set_index("feature")["importance"])
 
+                if result.get("optimal_ranges"):
+                    st.subheader("Optimal Ranges for This Segment")
+                    st.caption(
+                        "Ranges the model associates with higher virality. "
+                        "Variables with no reliable range for this segment are omitted."
+                    )
+                    st.dataframe(
+                        pd.DataFrame(
+                            [{"Variable": r["label"], "Optimal range": r["text"]}
+                             for r in result["optimal_ranges"]]
+                        ),
+                        hide_index=True, use_container_width=True,
+                    )
+
                 st.subheader("Strategic Guidance")
                 for r in recommendations:
                     if r.get("guidance"):
