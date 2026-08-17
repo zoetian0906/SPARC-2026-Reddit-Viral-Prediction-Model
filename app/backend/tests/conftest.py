@@ -15,3 +15,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _no_google_key(monkeypatch):
     monkeypatch.setattr("app.backend.llm.get_google_key", lambda: None)
+
+@pytest.fixture(autouse=True)
+def _no_groq_key(monkeypatch):
+    monkeypatch.setattr("app.backend.llm.get_groq_key", lambda: None)
