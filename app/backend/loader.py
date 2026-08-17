@@ -33,6 +33,7 @@ REPO_ID = "SPARC2026Reddit/MessyData-ZT"
 HF_TABLES: dict[str, str] = {
     "model_metadata": "For RAG/rag_model_rules_FINAL.parquet",
     "predictions": "For RAG/rag_predictions_FINAL.parquet",
+    "optimal_ranges": "For RAG/rag_optimal_ranges_FINAL.parquet",
 }
 
 
