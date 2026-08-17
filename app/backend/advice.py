@@ -58,12 +58,17 @@ def _fact_lines(facts: dict) -> str:
         )
     if facts.get("best_mechanism"):
         lines.append(f"- Strongest post type here: {facts['best_mechanism']}")
+    for r in facts.get("optimal_ranges", []):
+        lines.append(f"- Optimal {r['label']}: {r['text']}")
     return "\n".join(lines)
 
 
 def _template_advice(facts: dict, level: str) -> str:
     """Deterministic fallback (no LLM). Always non-empty when facts exist."""
     category = facts.get("category") or "this topic"
+    ranges = facts.get("optimal_ranges") or []
+    if ranges:
+        parts.append(f"Aim for a {ranges[0]['label']} of {ranges[0]['text']}.")  
     when = (
         f"{facts['best_day']} around {facts['best_hour']}:00 UTC"
         if facts.get("best_day") and facts.get("best_hour") is not None
@@ -101,8 +106,9 @@ def generate_advice(facts: dict, level: str) -> str:
 
         system = (
             "You advise a Reddit creator on how to post. Use ONLY the facts "
-            "given; never invent numbers, subreddits, or claims. Plain prose "
-            "only — no preamble, no bullets, no markdown. " + style
+            "given; never invent numbers, subreddits, or claims. Some segments "
+            "list no optimal ranges — if none are listed, do not mention ranges "
+            "at all. Plain prose only — no preamble, no bullets, no markdown. " + style
         )
         user = f"Facts:\n{_fact_lines(facts)}\n\nWrite the advice now."
 
