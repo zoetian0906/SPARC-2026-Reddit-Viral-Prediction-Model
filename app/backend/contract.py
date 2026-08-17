@@ -61,7 +61,7 @@ def _fmt_days(lo: float, hi: float) -> str:
 RANGE_LABELS: dict[str, tuple[str, object]] = {
     "title_length":      ("title length", lambda lo, hi: f"{lo:.0f}-{hi:.0f} words"),
     "body_length":       ("body length", lambda lo, hi: f"{lo:.0f}-{hi:.0f} words"),
-    "post_length_proxy": ("total length", lambda lo, hi: f"{lo:.0f}-{hi:.0f} tokens"),
+    "post_length_proxy": ("total length", lambda lo, hi: f"{lo:.0f}-{hi:.0f} words"),
     "hour_of_day":       ("posting hour", lambda lo, hi: f"{lo:.0f}:00-{hi:.0f}:00 UTC"),
     "day_of_week":       ("posting day", _fmt_days),
 }
