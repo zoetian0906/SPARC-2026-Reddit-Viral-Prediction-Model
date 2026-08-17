@@ -93,6 +93,20 @@ def lookup_optimal_ranges(
 
 
 def lookup_segment(
+    conn: duckdb.DuckDBPyConnection,
+    category: str,
+    post_type: str | None,
+    mechanism: str | None,
+) -> dict | None:
+    """Return the best-matching model_metadata row as a dict, or None.
+
+    Lookup order (first match wins):
+      1. exact:      category + post_type + mechanism
+      2. partial:    category + "ALL"     + mechanism
+      3. partial:    category + post_type + "ALL"
+      4. category:   category + "ALL"     + "ALL"
+      5. global:     "ALL"    + "ALL"     + "ALL"
+    """
     return _lookup_by_segment(conn, "model_metadata", category, post_type, mechanism)
 
 
