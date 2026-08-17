@@ -34,21 +34,21 @@ def _normalize(post_type: str | None, mechanism: str | None) -> tuple[str, str]:
     return (post_type or "ALL", mechanism or "ALL")
 
 
-def lookup_segment(
+# Tables _lookup_by_segment may read. A table name cannot be a bound parameter,
+# so this allowlist is the guard — never interpolate a caller-supplied value.
+_SEGMENT_TABLES = {"model_metadata", "optimal_ranges"}
+
+def _lookup_by_segment(
     conn: duckdb.DuckDBPyConnection,
+    table: str,
     category: str,
     post_type: str | None,
     mechanism: str | None,
 ) -> dict | None:
-    """Return the best-matching model_metadata row as a dict, or None.
+    """Shared 5-step fallback ladder over a segment-keyed table."""
+    if table not in _SEGMENT_TABLES:
+        raise ValueError(f"unknown segment table: {table}")
 
-    Lookup order (first match wins):
-      1. exact:      category + post_type + mechanism
-      2. partial:    category + "ALL"     + mechanism
-      3. partial:    category + post_type + "ALL"
-      4. category:   category + "ALL"     + "ALL"
-      5. global:     "ALL"    + "ALL"     + "ALL"
-    """
     pt, mech = _normalize(post_type, mechanism)
     candidates = [
         (category, pt, mech),
@@ -64,9 +64,9 @@ def lookup_segment(
             continue
         seen.add((cat, has_media, eng))
         df = conn.execute(
-            """
+            f"""
             SELECT *
-            FROM model_metadata
+            FROM {table}
             WHERE category = ? AND has_media = ? AND engagement_mechanism = ?
             LIMIT 1
             """,
@@ -75,6 +75,25 @@ def lookup_segment(
         if len(df):
             return df.iloc[0].to_dict()
     return None
+
+
+def lookup_optimal_ranges(
+    conn: duckdb.DuckDBPyConnection,
+    category: str,
+    post_type: str | None,
+    mechanism: str | None,
+) -> dict | None:
+    """Optimal-range row for a segment, same ladder as lookup_segment.
+
+    optimal_ranges shares model_metadata's key space exactly (verified: 82
+    segments each, no orphans), so looking up with an already-matched segment's
+    own keys is guaranteed to hit its exact row.
+    """
+    return _lookup_by_segment(conn, "optimal_ranges", category, post_type, mechanism)
+
+
+def lookup_segment(
+    return _lookup_by_segment(conn, "model_metadata", category, post_type, mechanism)
 
 
 def lookup_predictions(
