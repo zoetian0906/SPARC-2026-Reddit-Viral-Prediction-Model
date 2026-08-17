@@ -58,6 +58,7 @@ def _fact_lines(facts: dict) -> str:
         )
     if facts.get("best_mechanism"):
         lines.append(f"- Strongest post type here: {facts['best_mechanism']}"
+        )
     return "\n".join(lines)
 
 
