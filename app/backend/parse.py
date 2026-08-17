@@ -305,7 +305,7 @@ def parse_query(text: str) -> dict:
     text_lower = stripped.lower()
     # Prefer the LLM mapping; fall back to keywords when it returns None/errors
     # (including the no-API-key case, which keeps tests offline and fast).
-        category = llm_detect_category(stripped)
+    category = llm_detect_category(stripped)
     source = "llm" if category else None
     if category is None:
         category = _detect_category(text_lower)
