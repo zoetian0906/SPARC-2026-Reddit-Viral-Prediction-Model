@@ -299,16 +299,20 @@ def parse_query(text: str) -> dict:
             "mechanism": None,
             "location_mentioned": None,
             "raw_text": text,
+            "category_source": None
         }
 
     text_lower = stripped.lower()
     # Prefer the LLM mapping; fall back to keywords when it returns None/errors
     # (including the no-API-key case, which keeps tests offline and fast).
-    category = llm_detect_category(stripped)
+        category = llm_detect_category(stripped)
+    source = "llm" if category else None
     if category is None:
         category = _detect_category(text_lower)
+        source = "keyword" if category else None
     if category is None:
         category = _fuzzy_detect_category(text_lower)
+        source = "fuzzy" if category else None
     mechanism = _detect_mechanism(stripped, text_lower, category)
     location = _detect_location(stripped)
 
@@ -318,6 +322,7 @@ def parse_query(text: str) -> dict:
         "mechanism": mechanism,
         "location_mentioned": location,
         "raw_text": text,
+        "category_source": source
     }
 
 
