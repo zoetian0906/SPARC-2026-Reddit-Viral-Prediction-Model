@@ -41,6 +41,76 @@ def _drivers_from_segment(seg: dict) -> list[dict]:
     return drivers
 
 
+def _fmt_days(lo: float, hi: float) -> str:
+    """Render a day_of_week range as names, not the raw Sunday=0 integers."""
+    lo_name = DAY_NAMES.get(int(lo), str(int(lo)))
+    hi_name = DAY_NAMES.get(int(hi), str(int(hi)))
+    return lo_name if lo_name == hi_name else f"{lo_name} to {hi_name}"
+
+
+# Features whose optimal range is actionable for a human, with a display
+# formatter each. The NRC emotion columns and vader_compound are deliberately
+# absent: they are populated in only 6-15% of segments AND "keep nrc_disgust
+# between 0.08 and 0.14" is not advice anyone can act on.
+RANGE_LABELS: dict[str, tuple[str, object]] = {
+    "title_length":      ("title length", lambda lo, hi: f"{lo:.0f}-{hi:.0f} words"),
+    "body_length":       ("body length", lambda lo, hi: f"{lo:.0f}-{hi:.0f} words"),
+    "post_length_proxy": ("total length", lambda lo, hi: f"{lo:.0f}-{hi:.0f} tokens"),
+    "hour_of_day":       ("posting hour", lambda lo, hi: f"{lo:.0f}:00-{hi:.0f}:00 UTC"),
+    "day_of_week":       ("posting day", _fmt_days),
+}
+
+
+def _is_missing(value) -> bool:
+    """True for None, NaN, or non-numeric — i.e. no usable bound.
+
+    NaN is caught with the value != value identity so contract.py stays
+    pandas-free; parquet nulls arrive as float('nan') through .to_dict().
+    """
+    if value is None:
+        return True
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return True
+    return number != number
+
+
+def _optimal_ranges(range_row: dict | None, drivers: list[dict], limit: int = 3) -> list[dict]:
+    """Showable optimal ranges for a segment, most important first.
+
+    A range survives only if both bounds are present, numeric, and NOT equal —
+    4 body_length rows in the table have min == max, and "0-0 words" is worse
+    than silence. Order follows the segment's own |SHAP| ranking; features with
+    no SHAP column sort last rather than being dropped.
+    """
+    if not range_row:
+        return []
+
+    rank = {d["feature"]: i for i, d in enumerate(drivers)}
+    found: list[dict] = []
+
+    for feature, (label, fmt) in RANGE_LABELS.items():
+        lo = range_row.get(f"{feature}_opt_min")
+        hi = range_row.get(f"{feature}_opt_max")
+        if _is_missing(lo) or _is_missing(hi):
+            continue
+        lo, hi = float(lo), float(hi)
+        if hi < lo:
+            lo, hi = hi, lo
+        if lo == hi:
+            continue
+        found.append({
+            "feature": feature,
+            "label": label,
+            "text": fmt(lo, hi),
+            "rank": rank.get(feature, len(rank)),
+        })
+
+    found.sort(key=lambda r: r["rank"])
+    return found[:limit]
+    
+
 def get_recommendations(
     category: str,
     post_type: str | None = None,   # maps to Table 1/2 has_media
@@ -129,14 +199,23 @@ def get_recommendations(
     # falls back through ALL), not the raw request, so the numbers always
     # describe the rows we read. Real-data path only.
     advice = ""
+    ranges: list[dict] = []
     if not stub and seg is not None and tier != "none":
         try:
+            ranges = _optimal_ranges(
+                lookup_optimal_ranges(
+                    conn, seg["category"], seg["has_media"], seg["engagement_mechanism"]
+                ),
+                drivers_all,
+            )
             facts = segment_summary(
                 conn, seg["category"], seg["has_media"], seg["engagement_mechanism"]
             )
+            if facts:
+                facts["optimal_ranges"] = ranges
             advice = generate_advice(facts, level=mode)
         except Exception:
-            advice = ""
+            advice, ranges = "", []
 
     # drivers (SHAP feature importances) only surface in technical mode
     drivers = list(drivers_all) if mode == "technical" else []
