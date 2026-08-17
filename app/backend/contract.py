@@ -15,9 +15,15 @@ from __future__ import annotations
 from app.backend.confidence import assign_confidence
 from app.backend.guidance import generate_guidance_batch
 from app.backend.loader import get_db
-from app.backend.query import lookup_predictions, lookup_segment, segment_summary
+from app.backend.query import (
+    DAY_NAMES,
+    lookup_optimal_ranges,
+    lookup_predictions,
+    lookup_segment,
+    segment_summary,
+)
 from app.backend.stub import get_stub_segment
-from app.backend.advice import generate_advice
+from app.backend.advice import generate_advice, ranges_sentence
 
 # Canonical model feature names = Table 1 SHAP columns minus the "_shap" suffix.
 FEATURE_NAMES: list[str] = [
@@ -211,8 +217,13 @@ def get_recommendations(
             facts = segment_summary(
                 conn, seg["category"], seg["has_media"], seg["engagement_mechanism"]
             )
-            if facts:
-                facts["optimal_ranges"] = ranges
+            advice = generate_advice(facts, level=mode)
+            # Ranges are APPENDED, never folded into the prompt: the generated
+            # sentences survive exactly as written, and the numbers are rendered
+            # deterministically rather than paraphrased by the model.
+            extra = ranges_sentence(ranges)
+            if extra:
+                advice = f"{advice} {extra}".strip()
             advice = generate_advice(facts, level=mode)
         except Exception:
             advice, ranges = "", []
