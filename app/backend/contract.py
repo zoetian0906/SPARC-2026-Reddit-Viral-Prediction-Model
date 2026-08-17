@@ -228,5 +228,6 @@ def get_recommendations(
         "model_quality": model_quality,
         "drivers": drivers,
         "advice": advice,
+        "optimal_ranges": ranges,
         "notes": notes,
     }
